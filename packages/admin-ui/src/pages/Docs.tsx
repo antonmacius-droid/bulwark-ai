@@ -1,18 +1,20 @@
 import React, { useState } from "react";
 import { PageHeader, card } from "../components/shared";
 
-type DocSection = "quickstart" | "providers" | "pii" | "policies" | "budgets" | "rag" | "audit" | "compliance" | "streaming" | "api" | "tests";
+type DocSection = "quickstart" | "providers" | "retry" | "pii" | "policies" | "budgets" | "rag" | "audit" | "compliance" | "streaming" | "docker" | "api" | "tests";
 
 const SECTIONS: { id: DocSection; title: string; icon: string }[] = [
   { id: "quickstart", title: "Quick Start", icon: "M13 10V3L4 14h7v7l9-11h-7z" },
   { id: "providers", title: "LLM Providers", icon: "M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z" },
+  { id: "retry", title: "Retry & Fallback", icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" },
   { id: "pii", title: "PII Detection", icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" },
   { id: "policies", title: "Content Policies", icon: "M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" },
   { id: "budgets", title: "Budgets & Rate Limits", icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 1v8m0 0v1" },
   { id: "rag", title: "RAG Knowledge Base", icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253" },
   { id: "audit", title: "Audit Logging", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
-  { id: "compliance", title: "GDPR & SOC 2", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
+  { id: "compliance", title: "Compliance", icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" },
   { id: "streaming", title: "Streaming & Caching", icon: "M13 10V3L4 14h7v7l9-11h-7z" },
+  { id: "docker", title: "Docker Deployment", icon: "M5 12H3l9-9 9 9h-2M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" },
   { id: "api", title: "Admin API Reference", icon: "M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
   { id: "tests", title: "Test Suite", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
 ];
@@ -50,7 +52,7 @@ const response = await gateway.chat({
 // response.auditId — unique audit log entry ID`}</div>
       <h3 style={h3}>Pipeline</h3>
       <p style={p}>Every <code>gateway.chat()</code> call goes through this pipeline:</p>
-      <div style={p}>1. Input Validation → 2. Prompt Injection Detection → 3. PII Scan → 4. Content Policy Check → 5. Rate Limit → 6. Budget Check → 7. RAG Augment → 8. LLM Call (with timeout) → 9. Token Count → 10. Cost Calculate → 11. Audit Log</div>
+      <div style={p}>1. Input Validation → 2. Prompt Injection Detection → 3. PII Scan → 4. Content Policy Check → 5. Rate Limit → 6. Budget Check → 7. RAG Augment → 8. LLM Call (retry + fallback) → 9. Output PII Scan → 10. Cost Calculate → 11. Audit Log</div>
       <h3 style={h3}>Express Integration</h3>
       <div style={codeBlock}>{`import { bulwarkRouter, createAdminRouter } from "@bulwark-ai/gateway";
 
@@ -104,6 +106,49 @@ const azure = new AzureOpenAIProvider({
 // Ollama (local):  $0 / $0`}</div>
     </div>
   ),
+  retry: () => (
+    <div>
+      <h3 style={h3}>Automatic Retry</h3>
+      <p style={p}>When an LLM call fails (timeout, rate limit, server error), Bulwark automatically retries with exponential backoff before giving up.</p>
+      <div style={codeBlock}>{`const gateway = new AIGateway({
+  providers: {
+    openai:    { apiKey: "sk-..." },
+    anthropic: { apiKey: "sk-ant-..." },
+  },
+  retry: {
+    maxRetries: 2,           // retry up to 2 times (3 total attempts)
+    baseDelayMs: 1000,       // 1s, then 2s, then 4s (exponential)
+    retryableStatuses: [429, 500, 502, 503, 504],  // default
+  },
+});`}</div>
+      <h3 style={h3}>Fallback Chains</h3>
+      <p style={p}>Define fallback models that are tried in order when the primary model (and its retries) fail. Fallbacks can cross providers.</p>
+      <div style={codeBlock}>{`const gateway = new AIGateway({
+  providers: {
+    openai:    { apiKey: "sk-..." },
+    anthropic: { apiKey: "sk-ant-..." },
+    mistral:   { apiKey: "..." },
+  },
+  fallbacks: {
+    "gpt-4o": ["gpt-4o-mini", "claude-sonnet-4-20250514"],
+    "claude-opus-4-20250514": ["gpt-4o", "mistral-large-latest"],
+  },
+  retry: { maxRetries: 1 },
+});
+
+// Request flow for model: "gpt-4o":
+// 1. Try gpt-4o (OpenAI)      → fail → retry
+// 2. Try gpt-4o (retry #1)    → fail
+// 3. Try gpt-4o-mini (OpenAI) → fail → retry
+// 4. Try gpt-4o-mini (retry)  → fail
+// 5. Try claude-sonnet (Anthropic) → success!`}</div>
+      <h3 style={h3}>How It Works</h3>
+      <p style={p}><strong>Retryable errors:</strong> 429 (rate limit), 500, 502, 503, 504 (server errors), timeouts.</p>
+      <p style={p}><strong>Non-retryable:</strong> 401 (auth), 400 (bad request), 403 (forbidden) — these fail immediately.</p>
+      <p style={p}><strong>Fallback resolution:</strong> Each fallback model is auto-routed to its provider. If a provider isn't configured, that fallback is skipped.</p>
+      <p style={p}><strong>Response metadata:</strong> <code>response.model</code> and <code>response.provider</code> reflect the actual model/provider that succeeded.</p>
+    </div>
+  ),
   pii: () => (
     <div>
       <h3 style={h3}>PII Detection</h3>
@@ -155,7 +200,7 @@ const azure = new AzureOpenAIProvider({
       <p style={p}><strong>topic_restriction:</strong> Block discussion of specific topics.</p>
       <p style={p}><strong>max_tokens:</strong> Limit input size.</p>
       <h3 style={h3}>Prompt Injection Guard</h3>
-      <p style={p}>Built-in detection for 15+ injection patterns: instruction override, role-play, jailbreak, delimiter injection, encoded payloads. Configurable sensitivity (low/medium/high).</p>
+      <p style={p}>Built-in detection for 20+ injection patterns: instruction override, DAN mode, system prompt extraction, role-play, jailbreak, developer mode, delimiter injection, encoded payloads, forget/reset/disregard instructions. Configurable sensitivity (low/medium/high).</p>
     </div>
   ),
   budgets: () => (
@@ -260,39 +305,87 @@ const anomalies = await soc2.detectAnomalies();`}</div>
   ),
   compliance: () => (
     <div>
-      <h3 style={h3}>GDPR Compliance</h3>
+      <h3 style={h3}>5 Compliance Modules</h3>
+      <p style={p}>Bulwark ships with GDPR, SOC 2, HIPAA, CCPA, and Data Residency modules. Each is independently configurable.</p>
+
+      <h3 style={h3}>GDPR (EU)</h3>
       <div style={codeBlock}>{`import { GDPRManager } from "@bulwark-ai/gateway";
 
 const gdpr = new GDPRManager(gateway.database, {
-  retentionDays: 365,          // auto-delete after 1 year
-  hashUserIds: true,           // hash IDs in audit logs
-  metadataOnlyAudit: false,    // don't store message content
+  retentionDays: 365,
+  hashUserIds: true,
+  metadataOnlyAudit: false,
 });
 
-// Right to Erasure (Article 17)
-gdpr.eraseUserData("user-123");
+gdpr.eraseUserData("user-123");          // Right to Erasure (Art. 17)
+const data = gdpr.exportUserData("u-1"); // Data Portability (Art. 20)
+gdpr.enforceRetention();                 // Run daily
+gdpr.generateProcessingReport();         // DPIA report`}</div>
 
-// Data Portability (Article 20)
-const export = gdpr.exportUserData("user-123");
+      <h3 style={h3}>SOC 2</h3>
+      <div style={codeBlock}>{`import { SOC2Manager } from "@bulwark-ai/gateway";
 
-// Data Retention (run daily)
-gdpr.enforceRetention();
+const soc2 = new SOC2Manager(gateway.database, {
+  anomalyThresholds: {
+    maxRequestsPerUserPerHour: 200,
+    maxPiiPerHour: 50,
+    maxCostPerUserPerDay: 10,
+  },
+  onAnomaly: (event) => pagerduty.alert(event),
+});
 
-// DPIA Report
-const report = gdpr.generateProcessingReport();`}</div>
-      <h3 style={h3}>SOC 2 Controls</h3>
-      <div style={codeBlock}>{`// Vendor report for auditors
-const vendors = soc2.generateVendorReport();
-// { providers: [{ name: "openai", region: "US", requestCount, cost }] }
+soc2.detectAnomalies();              // Run on schedule
+soc2.generateVendorReport();         // For auditors
+soc2.getHealthStatus(activeReqs);    // Health check
+soc2.logChange({ entityType: "policy", entityId: "p-1",
+  action: "updated", changedBy: "admin@co.com" });`}</div>
 
-// Health check
-const health = soc2.getHealthStatus(gateway.activeRequests);
+      <h3 style={h3}>HIPAA (US Healthcare)</h3>
+      <div style={codeBlock}>{`import { HIPAAManager, HIPAA_IDENTIFIERS } from "@bulwark-ai/gateway";
 
-// Change tracking
-soc2.logChange({
-  entityType: "policy", entityId: "no-secrets",
-  action: "updated", changedBy: "admin@company.com",
-});`}</div>
+const hipaa = new HIPAAManager(gateway.database, {
+  enablePHIAccessLog: true,     // Log all PHI access
+  baaRequired: true,            // Require BAA with providers
+});
+
+// 18 Safe Harbor identifiers checked automatically
+// HIPAA_IDENTIFIERS: names, dates, phone, fax, email, SSN,
+// medical record #, health plan #, account #, license #,
+// vehicle ID, device ID, URLs, IPs, biometric, photos, etc.
+
+hipaa.logPHIAccess({ userId: "doc-1", action: "view",
+  patientId: "p-123", dataType: "diagnosis" });
+hipaa.checkBAA("openai");   // Verify BAA exists for provider`}</div>
+
+      <h3 style={h3}>CCPA (California)</h3>
+      <div style={codeBlock}>{`import { CCPAManager } from "@bulwark-ai/gateway";
+
+const ccpa = new CCPAManager(gateway.database, {
+  saleOfDataEnabled: false,    // Honor "Do Not Sell"
+  gpcSignalEnabled: true,      // Respect GPC browser signal
+});
+
+ccpa.handleAccessRequest("user-1");    // Right to Know
+ccpa.handleDeleteRequest("user-1");    // Right to Delete
+ccpa.handleOptOutRequest("user-1");    // Right to Opt-Out
+ccpa.checkGPCSignal(requestHeaders);   // Auto-detect GPC`}</div>
+
+      <h3 style={h3}>Data Residency</h3>
+      <div style={codeBlock}>{`import { DataResidencyManager, PROVIDER_REGIONS } from "@bulwark-ai/gateway";
+
+const residency = new DataResidencyManager(gateway.database, {
+  allowedRegions: ["EU", "EEA"],
+  blockCrossBorder: true,
+});
+
+// Check if a provider+model combo is allowed
+residency.checkProvider("openai", "gpt-4o");
+
+// Cross-border transfer assessment (for legal)
+const tia = residency.generateTransferAssessment("openai");
+
+// PROVIDER_REGIONS maps each provider to data processing regions
+// OpenAI: US, Anthropic: US, Mistral: EU, Google: US/EU, Ollama: local`}</div>
     </div>
   ),
   streaming: () => (
@@ -330,10 +423,66 @@ const cache = new ResponseCache(new RedisCacheStore(redis), {
 // Uses SHA-256 hash of (model + messages) as cache key`}</div>
     </div>
   ),
+  docker: () => (
+    <div>
+      <h3 style={h3}>Docker Compose (Recommended)</h3>
+      <p style={p}>The fastest way to deploy Bulwark AI in production. Includes the gateway API, admin UI, and Redis for rate limiting.</p>
+      <div style={codeBlock}>{`# Clone and start
+git clone https://github.com/antonmacius-droid/bulwark-ai.git
+cd bulwark-ai
+
+# Set your API keys
+echo "OPENAI_API_KEY=sk-your-key" > .env
+echo "ANTHROPIC_API_KEY=sk-ant-your-key" >> .env  # optional
+
+# Start everything
+docker compose up -d
+
+# Services:
+# Gateway API:  http://localhost:3100
+# Admin UI:     http://localhost:3101
+# Redis:        localhost:6379 (internal)
+# Health:       http://localhost:3100/health`}</div>
+
+      <h3 style={h3}>Making Requests</h3>
+      <div style={codeBlock}>{`# Chat request
+curl http://localhost:3100/v1/chat \\
+  -H "Content-Type: application/json" \\
+  -H "X-User-Id: user-123" \\
+  -H "X-Team-Id: engineering" \\
+  -H "X-Tenant-Id: acme-corp" \\
+  -d '{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+
+# Admin dashboard data
+curl http://localhost:3100/admin/dashboard
+
+# Health check
+curl http://localhost:3100/health`}</div>
+
+      <h3 style={h3}>Environment Variables</h3>
+      <div style={p}>
+        <div><code>OPENAI_API_KEY</code> — OpenAI API key</div>
+        <div style={{ marginTop: 4 }}><code>ANTHROPIC_API_KEY</code> — Anthropic API key (optional)</div>
+        <div style={{ marginTop: 4 }}><code>MISTRAL_API_KEY</code> — Mistral API key (optional)</div>
+        <div style={{ marginTop: 4 }}><code>GOOGLE_API_KEY</code> — Google AI API key (optional)</div>
+        <div style={{ marginTop: 4 }}><code>BULWARK_LICENSE_KEY</code> — Suppresses BSL license notice for RAG/compliance modules</div>
+        <div style={{ marginTop: 4 }}><code>DATABASE_PATH</code> — SQLite file path (default: <code>/app/data/bulwark.db</code>)</div>
+        <div style={{ marginTop: 4 }}><code>REDIS_URL</code> — Redis connection URL (default: <code>redis://redis:6379</code>)</div>
+        <div style={{ marginTop: 4 }}><code>GATEWAY_PORT</code> — API port (default: <code>3100</code>)</div>
+        <div style={{ marginTop: 4 }}><code>ADMIN_PORT</code> — Admin UI port (default: <code>3101</code>)</div>
+      </div>
+
+      <h3 style={h3}>Data Persistence</h3>
+      <p style={p}>SQLite data is stored in <code>./data/</code> on the host (mounted as a volume). Redis data uses a named Docker volume with AOF persistence.</p>
+    </div>
+  ),
   api: () => (
     <div>
       <h3 style={h3}>Admin API Endpoints</h3>
-      <div style={{ fontSize: 13, lineHeight: 2.2, ...p }}>
+      <div style={{ ...p, fontSize: 13, lineHeight: 2.2 }}>
         <div><code style={{ background: "#EFF6FF", padding: "2px 6px", borderRadius: 4, color: "#2563EB", fontWeight: 600 }}>GET</code> <code>/dashboard</code> — KPI stats, top models/users/teams</div>
         <div><code style={{ background: "#EFF6FF", padding: "2px 6px", borderRadius: 4, color: "#2563EB", fontWeight: 600 }}>GET</code> <code>/audit</code> — Query audit log (filterable, paginated)</div>
         <div><code style={{ background: "#EFF6FF", padding: "2px 6px", borderRadius: 4, color: "#2563EB", fontWeight: 600 }}>GET</code> <code>/knowledge</code> — List KB sources</div>
@@ -356,7 +505,7 @@ const cache = new ResponseCache(new RedisCacheStore(redis), {
   ),
   tests: () => (
     <div>
-      <h3 style={h3}>Test Suite — 125 Tests, 100% Pass Rate</h3>
+      <h3 style={h3}>Test Suite — 131 Tests, 100% Pass Rate</h3>
       <p style={p}>Bulwark AI ships with comprehensive unit and integration tests. Integration tests make real API calls to OpenAI to verify the full governance pipeline.</p>
       <h3 style={h3}>Running Tests</h3>
       <div style={codeBlock}>{`# Unit tests (no API key needed, instant)
@@ -376,7 +525,7 @@ OPENAI_API_KEY=sk-xxx npx vitest run`}</div>
         <div style={{ marginTop: 6 }}><strong>Document Chunker (6)</strong> — Paragraph/sentence/markdown splitting. Chunk size, overlap, empty text, sequential indices.</div>
         <div style={{ marginTop: 6 }}><strong>Cache & Rate Limiter (9)</strong> — Memory store set/get/TTL. Counter increment/expire. Rate limiter allow/block/scope.</div>
       </div>
-      <h3 style={h3}>Integration Tests (83 tests, real LLM calls)</h3>
+      <h3 style={h3}>Integration Tests (89 tests, real LLM calls)</h3>
       <div style={p}>
         <div><strong>1. Basic Gateway (5)</strong> — Request metadata, system messages, multi-turn, maxTokens, deterministic output.</div>
         <div style={{ marginTop: 6 }}><strong>2. PII Input Redaction (8)</strong> — Email, phone, credit card, SSN, IBAN, IP redacted before LLM sees them. Multiple PII. Disable option.</div>
@@ -398,6 +547,8 @@ OPENAI_API_KEY=sk-xxx npx vitest run`}</div>
         <div style={{ marginTop: 6 }}><strong>18. International PII (3)</strong> — Email in German context, French context. International phone format.</div>
         <div style={{ marginTop: 6 }}><strong>19. Streaming Edge Cases (2)</strong> — Streaming with system message. Streaming records audit entry.</div>
         <div style={{ marginTop: 6 }}><strong>20. Runtime Policy Management (2)</strong> — Add policy at runtime and enforce it. Remove policy and verify enforcement stops.</div>
+        <div style={{ marginTop: 6 }}><strong>21. RAG Knowledge Base E2E (3)</strong> — Ingest document, search with semantic similarity, chat with KB context and source citations. Tenant isolation verified. Source deletion cascades to chunks.</div>
+        <div style={{ marginTop: 6 }}><strong>22. Retry + Fallback (3)</strong> — Falls back to alternate model when primary provider not configured. Retry succeeds on working model. All models exhausted throws error.</div>
       </div>
     </div>
   ),
