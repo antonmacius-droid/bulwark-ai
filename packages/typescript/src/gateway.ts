@@ -67,11 +67,25 @@ export class AIGateway {
   private readonly timeoutMs: number;
   private readonly retryConfig: { maxRetries: number; baseDelayMs: number; retryableStatuses: number[] };
   private readonly fallbacks: Record<string, string[]>;
+  private readonly failMode: "fail-closed" | "fail-open";
   private initialized = false;
   private shutdownRequested = false;
   private activeRequests = 0;
 
   constructor(config: GatewayConfig) {
+    // Apply mode presets (individual settings override)
+    if (config.mode) {
+      const presets = {
+        strict: { pii: { enabled: true, action: "block" as const }, budgets: { enabled: true, defaultUserLimit: 100_000, onExceeded: "block" as const }, promptGuard: { enabled: true, action: "block" as const, sensitivity: "high" as const }, audit: true },
+        balanced: { pii: { enabled: true, action: "redact" as const }, budgets: { enabled: true, defaultUserLimit: 500_000 }, audit: true },
+        dev: { pii: { enabled: false }, budgets: { enabled: false }, audit: true },
+      };
+      const preset = presets[config.mode];
+      config = { ...preset, ...config, pii: config.pii ?? preset.pii, budgets: config.budgets ?? preset.budgets };
+    }
+
+    this.failMode = config.failMode || "fail-closed";
+
     // Validate required config
     if (!config.providers || Object.keys(config.providers).length === 0) {
       throw new BulwarkError("INVALID_CONFIG", "At least one provider must be configured");

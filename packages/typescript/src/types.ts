@@ -10,7 +10,28 @@ export interface ProviderConfig {
 
 export type GatewayProvider = "openai" | "anthropic" | "mistral" | "google" | "ollama" | "azure" | "custom";
 
+/**
+ * Quick-start presets — use instead of manual config.
+ * - `strict`: All protections on, PII blocked, low budgets, injection guard high sensitivity
+ * - `balanced`: PII redacted, moderate budgets, injection guard medium (default behavior)
+ * - `dev`: Minimal protections, no budgets, audit only — for development/testing
+ */
+export type GatewayMode = "strict" | "balanced" | "dev";
+
+/**
+ * What happens when the governance system itself fails (e.g., DB down, PII scan crashes).
+ * - `fail-closed`: Block the request (safe default — no request passes without governance)
+ * - `fail-open`: Allow the request through (availability-first — log the failure, don't block users)
+ */
+export type FailMode = "fail-closed" | "fail-open";
+
 export interface GatewayConfig {
+  /** Quick-start preset — sets sensible defaults for all options. Individual settings override. */
+  mode?: GatewayMode;
+
+  /** What happens when governance checks fail (default: "fail-closed") */
+  failMode?: FailMode;
+
   /** LLM provider credentials */
   providers: Partial<Record<GatewayProvider, ProviderConfig>>;
 

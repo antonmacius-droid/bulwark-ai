@@ -31,6 +31,15 @@ npm install @bulwark-ai/gateway
 ```typescript
 import { AIGateway } from "@bulwark-ai/gateway";
 
+// Option A: Use a preset (recommended)
+const gateway = new AIGateway({
+  mode: "balanced",                  // "strict" | "balanced" | "dev"
+  failMode: "fail-closed",          // "fail-closed" | "fail-open"
+  providers: { openai: { apiKey: process.env.OPENAI_API_KEY! } },
+  database: "bulwark.db",
+});
+
+// Option B: Full control
 const gateway = new AIGateway({
   providers: {
     openai: { apiKey: process.env.OPENAI_API_KEY! },
@@ -62,6 +71,23 @@ const response = await gateway.chat({
 | No audit trail | Every request logged — user, model, tokens, cost, duration |
 | GDPR/SOC 2 compliance | Right to erasure, data export, retention, anomaly detection |
 | Different teams use different tools | One gateway, 6 LLM providers, unified policies |
+
+## Config Presets
+
+| Mode | PII | Budgets | Injection Guard | Best For |
+|------|-----|---------|----------------|----------|
+| `strict` | Block | 100K tokens, block | High sensitivity | Healthcare, finance, regulated |
+| `balanced` | Redact | 500K tokens | Medium sensitivity | General production use |
+| `dev` | Off | Off | On (audit only) | Development and testing |
+
+```typescript
+// Strict mode — blocks PII, tight budgets, aggressive injection detection
+new AIGateway({ mode: "strict", providers: { ... }, database: "bulwark.db" });
+
+// Fail strategy — what happens when governance itself breaks
+new AIGateway({ failMode: "fail-open", ... });   // availability-first (log failure, allow request)
+new AIGateway({ failMode: "fail-closed", ... });  // security-first (block request if governance fails)
+```
 
 ## Features
 

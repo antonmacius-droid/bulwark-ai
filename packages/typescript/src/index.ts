@@ -1,6 +1,6 @@
 // Core
 export { AIGateway, BulwarkError } from "./gateway";
-export type { GatewayConfig, ChatRequest, ChatResponse, ChatMessage, GatewayProvider, ProviderConfig } from "./types";
+export type { GatewayConfig, GatewayMode, FailMode, ChatRequest, ChatResponse, ChatMessage, GatewayProvider, ProviderConfig } from "./types";
 
 // Security
 export { PIIDetector } from "./security/pii";
