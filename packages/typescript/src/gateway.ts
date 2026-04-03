@@ -68,6 +68,7 @@ export class AIGateway {
   private readonly retryConfig: { maxRetries: number; baseDelayMs: number; retryableStatuses: number[] };
   private readonly fallbacks: Record<string, string[]>;
   private readonly failMode: "fail-closed" | "fail-open";
+  private _enabled: boolean;
   private initialized = false;
   private shutdownRequested = false;
   private activeRequests = 0;
@@ -85,6 +86,7 @@ export class AIGateway {
     }
 
     this.failMode = config.failMode || "fail-closed";
+    this._enabled = config.enabled !== false; // default: enabled
 
     // Validate required config
     if (!config.providers || Object.keys(config.providers).length === 0) {
@@ -157,6 +159,10 @@ export class AIGateway {
    * Pipeline: Validate → PII scan → Policy check → Rate limit → Budget check → [RAG augment] → LLM call (with timeout) → Token count → Cost calc → Audit log
    */
   async chat(request: ChatRequest): Promise<ChatResponse> {
+    // Kill switch
+    if (this._enabled === false) {
+      throw new BulwarkError("GATEWAY_DISABLED", "AI gateway is disabled. Set enabled: true to resume.");
+    }
     if (this.shutdownRequested) {
       throw new BulwarkError("SHUTTING_DOWN", "Gateway is shutting down, not accepting new requests");
     }
@@ -164,6 +170,7 @@ export class AIGateway {
     await this.init();
     this.activeRequests++;
     const start = Date.now();
+    const trace: ChatResponse["trace"] = request.debug ? [] : undefined;
 
     try {
       // 0. Input Validation
@@ -318,6 +325,7 @@ export class AIGateway {
         inputTokens: llmResponse.usage.inputTokens, outputTokens: llmResponse.usage.outputTokens,
         costUsd: cost.totalCost, durationMs,
         piiDetections: totalPii || undefined,
+        metadata: request.metadata,
       });
 
       return {
@@ -329,7 +337,7 @@ export class AIGateway {
           ...piiDetections.map(m => ({ type: m.type, redacted: true, direction: "input" as const })),
           ...outputPiiDetections.map(m => ({ type: m.type, redacted: true, direction: "output" as const })),
         ] : undefined,
-        sources, auditId, durationMs,
+        sources, auditId, durationMs, trace,
       };
     } finally {
       this.activeRequests--;
@@ -650,6 +658,10 @@ export class AIGateway {
 
   /** Get the tenant manager (multi-tenant mode only) */
   get tenants(): TenantManager | null { return this._tenantManager; }
+
+  /** Kill switch — disable/enable the gateway at runtime */
+  get enabled(): boolean { return this._enabled; }
+  set enabled(value: boolean) { this._enabled = value; }
 }
 
 /** Bulwark-specific error with code and metadata */

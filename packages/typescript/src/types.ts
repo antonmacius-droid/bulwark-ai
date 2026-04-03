@@ -32,6 +32,9 @@ export interface GatewayConfig {
   /** What happens when governance checks fail (default: "fail-closed") */
   failMode?: FailMode;
 
+  /** Global kill switch — set to false to block ALL requests instantly */
+  enabled?: boolean;
+
   /** LLM provider credentials */
   providers: Partial<Record<GatewayProvider, ProviderConfig>>;
 
@@ -128,6 +131,12 @@ export interface ChatRequest {
   /** Streaming */
   stream?: boolean;
 
+  /** Debug mode — returns pipeline trace showing what each governance step did */
+  debug?: boolean;
+
+  /** Custom metadata — stored in audit log for analytics (e.g., feature, product, environment) */
+  metadata?: Record<string, string | number | boolean>;
+
   /** Pass-through params (temperature, max_tokens, etc) */
   temperature?: number;
   maxTokens?: number;
@@ -172,4 +181,7 @@ export interface ChatResponse {
 
   /** Request duration in ms */
   durationMs: number;
+
+  /** Debug trace — only present when `debug: true` in request */
+  trace?: { stage: string; result: string; durationMs: number; details?: unknown }[];
 }
