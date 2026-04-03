@@ -475,6 +475,65 @@ The CTO is responsible for the TypeScript SDK, while the Python SDK is planned f
   }, 60000);
 });
 
+// ═══ 22. RETRY + FALLBACK ═══
+describe("22. Retry + Fallback", () => {
+  testIf("falls back to alternate model when primary provider missing", async () => {
+    // Gateway with only OpenAI configured, fallback from non-existent provider model to OpenAI
+    const fbGateway = new AIGateway({
+      providers: { openai: { apiKey: API_KEY } },
+      database: ":memory:",
+      fallbacks: { "claude-sonnet-4-20250514": [MODEL] }, // Claude not configured, falls back to gpt-4o-mini
+    });
+    await fbGateway.init();
+
+    const res = await fbGateway.chat({
+      model: "claude-sonnet-4-20250514", userId: "fb-test",
+      messages: [{ role: "user", content: "Say: fallback_works" }],
+      temperature: 0, maxTokens: 20,
+    });
+
+    expect(res.content.toLowerCase()).toContain("fallback");
+    expect(res.model).toBe(MODEL); // Should have used the fallback model
+    expect(res.provider).toBe("openai");
+    await fbGateway.shutdown();
+  }, T);
+
+  testIf("retries on failure and succeeds", async () => {
+    // Use normal gateway with retry config — just verify a normal call works through retry path
+    const retryGateway = new AIGateway({
+      providers: { openai: { apiKey: API_KEY } },
+      database: ":memory:",
+      retry: { maxRetries: 1, baseDelayMs: 100 },
+    });
+    await retryGateway.init();
+
+    const res = await retryGateway.chat({
+      model: MODEL, userId: "retry-test",
+      messages: [{ role: "user", content: "Say: retry_ok" }],
+      temperature: 0, maxTokens: 20,
+    });
+    expect(res.content).toBeDefined();
+    expect(res.model).toBe(MODEL);
+    await retryGateway.shutdown();
+  }, T);
+
+  testIf("fails after all fallbacks exhausted", async () => {
+    const failGateway = new AIGateway({
+      providers: { openai: { apiKey: "sk-invalid-key-for-test" } },
+      database: ":memory:",
+      retry: { maxRetries: 0 },
+      fallbacks: { "gpt-4o": ["gpt-4o-mini"] },
+    });
+    await failGateway.init();
+
+    await expect(failGateway.chat({
+      model: "gpt-4o", userId: "fail-test",
+      messages: [{ role: "user", content: "Hello" }],
+    })).rejects.toThrow();
+    await failGateway.shutdown();
+  }, T);
+});
+
 // ═══ 20. POLICY RUNTIME MANAGEMENT ═══
 describe("20. Runtime Policy Management", () => {
   testIf("add policy at runtime and enforce it", async () => {

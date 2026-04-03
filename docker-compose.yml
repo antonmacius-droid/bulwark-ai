@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  gateway:
+    build: .
+    container_name: bulwark-gateway
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+      - "3101:3101"
+    environment:
+      - NODE_ENV=production
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - BULWARK_LICENSE_KEY=${BULWARK_LICENSE_KEY:-}
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_PATH=/app/data/bulwark.db
+      - GATEWAY_PORT=3100
+      - ADMIN_PORT=3101
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - bulwark
+
+  redis:
+    image: redis:7-alpine
+    container_name: bulwark-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bulwark
+
+volumes:
+  redis-data:
+
+networks:
+  bulwark:
+    driver: bridge

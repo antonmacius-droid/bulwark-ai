@@ -20,7 +20,7 @@
 npm install @bulwark-ai/gateway
 ```
 
-**128 tests passing** (42 unit + 86 integration with real LLM calls) | **Zero type errors** | MIT + BSL 1.1
+**131 tests passing** (42 unit + 89 integration with real LLM calls) | **Zero type errors** | MIT + BSL 1.1
 
 <p align="center">
   <img src="demo.svg" alt="Bulwark AI Pipeline" width="100%">
@@ -87,6 +87,27 @@ await gateway.chat({ model: "llama3.2", ... });            // → Ollama
 ```
 
 Azure OpenAI also supported via `AzureOpenAIProvider`.
+
+### Retry + Fallback
+
+```typescript
+const gateway = new AIGateway({
+  providers: {
+    openai:    { apiKey: "sk-..." },
+    anthropic: { apiKey: "sk-ant-..." },
+  },
+  // Automatic retry with exponential backoff
+  retry: { maxRetries: 2, baseDelayMs: 1000 },
+  // Fallback chain — if primary fails, try alternatives in order
+  fallbacks: {
+    "gpt-4o": ["gpt-4o-mini", "claude-sonnet-4-20250514"],
+    "claude-opus-4-20250514": ["gpt-4o", "gpt-4o-mini"],
+  },
+});
+
+// If gpt-4o is down → retries 2x → falls back to gpt-4o-mini → then Claude Sonnet
+await gateway.chat({ model: "gpt-4o", ... });
+```
 
 ### PII Detection (Input + Output)
 
@@ -259,6 +280,32 @@ Standalone admin UI with: Dashboard, Playground, Users & Teams, Knowledge Base, 
 cd packages/admin-ui && npm run dev  # http://localhost:3100
 ```
 
+## Docker
+
+```bash
+# Quick start with Docker Compose
+git clone https://github.com/antonmacius-droid/bulwark-ai.git
+cd bulwark-ai
+
+# Set your API keys
+echo "OPENAI_API_KEY=sk-your-key" > .env
+
+# Start gateway + Redis
+docker compose up -d
+
+# Gateway API:  http://localhost:3100
+# Admin UI:     http://localhost:3101
+# Health check: http://localhost:3100/health
+```
+
+```bash
+# Send a request
+curl http://localhost:3100/v1/chat \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: user-123" \
+  -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
 ## Architecture
 
 ```
@@ -299,7 +346,7 @@ Your App
 
 ## Test Suite
 
-**125 tests, 100% pass rate.**
+**131 tests, 100% pass rate.**
 
 | Suite | Tests | What |
 |-------|-------|------|
@@ -327,6 +374,8 @@ Your App
 | Integration: Hardening | 2 | Secret protection, impersonation resistance |
 | Integration: International | 3 | German, French, international phone PII |
 | Integration: Streaming Edge | 2 | System messages, audit recording |
+| Integration: RAG E2E | 3 | Ingest → search → chat with KB, tenant isolation, delete |
+| Integration: Retry + Fallback | 3 | Provider fallback, retry success, exhaustion |
 | Integration: Runtime Policies | 2 | Add/remove at runtime |
 
 Run integration tests: `OPENAI_API_KEY=sk-xxx npx vitest run src/__tests__/integration.test.ts`
@@ -352,7 +401,8 @@ Run integration tests: `OPENAI_API_KEY=sk-xxx npx vitest run src/__tests__/integ
 | Admin UI | Yes | Separate | SaaS | SaaS |
 | Redis Support | Yes | No | N/A | N/A |
 | Providers | 6 | 100+ | Many | Many |
-| Test Suite | 125 tests | ? | ? | ? |
+| Retry + Fallback | Yes | Yes | Yes | No |
+| Test Suite | 131 tests | ? | ? | ? |
 
 ## License
 

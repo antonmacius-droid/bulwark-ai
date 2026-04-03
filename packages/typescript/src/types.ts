@@ -40,6 +40,30 @@ export interface GatewayConfig {
 
   /** Model pricing overrides (per million tokens) */
   modelPricing?: Record<string, { input: number; output: number }>;
+
+  /** Retry config for failed LLM calls */
+  retry?: {
+    /** Max retry attempts (default: 2) */
+    maxRetries?: number;
+    /** Base delay in ms before retry (default: 1000). Doubles each attempt (exponential backoff). */
+    baseDelayMs?: number;
+    /** Retry on these HTTP status codes (default: [429, 500, 502, 503, 504]) */
+    retryableStatuses?: number[];
+  };
+
+  /**
+   * Fallback models — tried in order when the primary model fails.
+   * Maps a model name to a list of fallback models.
+   *
+   * @example
+   * ```ts
+   * fallbacks: {
+   *   "gpt-4o": ["gpt-4o-mini", "claude-sonnet-4-20250514"],
+   *   "claude-opus-4-20250514": ["gpt-4o", "gemini-1.5-pro"],
+   * }
+   * ```
+   */
+  fallbacks?: Record<string, string[]>;
 }
 
 export interface ChatMessage {

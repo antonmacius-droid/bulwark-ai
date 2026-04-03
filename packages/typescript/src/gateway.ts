@@ -64,6 +64,8 @@ export class AIGateway {
   private readonly rateLimiter: RateLimiter | null = null;
   private readonly _tenantManager: TenantManager | null = null;
   private readonly timeoutMs: number;
+  private readonly retryConfig: { maxRetries: number; baseDelayMs: number; retryableStatuses: number[] };
+  private readonly fallbacks: Record<string, string[]>;
   private initialized = false;
   private shutdownRequested = false;
   private activeRequests = 0;
@@ -92,6 +94,12 @@ export class AIGateway {
     );
     this.auditStore = createAuditStore(this.db);
     this.timeoutMs = (config as GatewayConfig & { timeoutMs?: number }).timeoutMs || DEFAULT_TIMEOUT_MS;
+    this.retryConfig = {
+      maxRetries: config.retry?.maxRetries ?? 2,
+      baseDelayMs: config.retry?.baseDelayMs ?? 1000,
+      retryableStatuses: config.retry?.retryableStatuses ?? [429, 500, 502, 503, 504],
+    };
+    this.fallbacks = config.fallbacks || {};
 
     // Cache — Redis or in-memory
     this.cache = (config as GatewayConfig & { cache?: CacheStore }).cache || new MemoryCacheStore();
@@ -146,9 +154,6 @@ export class AIGateway {
       this.validateRequest(request);
       const model = request.model || "gpt-4o";
 
-      // 1. Resolve provider
-      const { provider, providerInstance } = this.resolveProvider(model);
-
       // 2. Prompt Injection Detection — scan ALL user messages, not just last
       let messages = [...request.messages]; // defensive copy
       for (let i = 0; i < messages.length; i++) {
@@ -161,7 +166,7 @@ export class AIGateway {
             } else {
               await this.auditStore.log({
                 tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-                action: "policy_block", model, provider,
+                action: "policy_block", model,
                 policyViolations: guardResult.injections.map(j => `prompt_injection:${j.pattern}`),
                 metadata: { injections: guardResult.injections, messageIndex: i },
               });
@@ -182,7 +187,7 @@ export class AIGateway {
           if (result.blocked) {
             await this.auditStore.log({
               tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-              action: "pii_detected", model, provider,
+              action: "pii_detected", model,
               piiDetections: result.matches.length,
               metadata: { types: result.matches.map(m => m.type), messageIndex: i },
             });
@@ -201,7 +206,7 @@ export class AIGateway {
         if (blocked.length > 0) {
           await this.auditStore.log({
             tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-            action: "policy_block", model, provider,
+            action: "policy_block", model,
             policyViolations: blocked.map(v => v.policyId),
           });
           throw new BulwarkError("POLICY_BLOCKED", `Content policy violated: ${blocked.map(v => v.policyName).join(", ")}`, { violations: blocked });
@@ -222,7 +227,7 @@ export class AIGateway {
         if (!allowed.ok) {
           await this.auditStore.log({
             tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-            action: "budget_exceeded", model, provider,
+            action: "budget_exceeded", model,
             metadata: { used: allowed.used, limit: allowed.limit },
           });
           throw new BulwarkError("BUDGET_EXCEEDED", `Budget exceeded: ${allowed.used}/${allowed.limit} tokens used`, { used: allowed.used, limit: allowed.limit });
@@ -261,15 +266,14 @@ export class AIGateway {
         }
       }
 
-      // 7. LLM Call with Timeout
-      const llmResponse = await this.callWithTimeout(
-        providerInstance.chat({ model, messages, temperature: request.temperature, maxTokens: request.maxTokens, topP: request.topP, stop: request.stop, stream: request.stream }),
-        this.timeoutMs,
-        model
-      );
+      // 7. LLM Call with Retry + Fallback
+      const llmResult = await this.callWithRetryAndFallback(model, messages, request);
+      const llmResponse = llmResult.response;
+      const actualModel = llmResult.model;
+      const actualProvider = llmResult.provider;
 
       // 8. Cost Calculation
-      const cost = this.costCalculator.calculate(model, llmResponse.usage.inputTokens, llmResponse.usage.outputTokens);
+      const cost = this.costCalculator.calculate(actualModel, llmResponse.usage.inputTokens, llmResponse.usage.outputTokens);
 
       // 9. Record Usage
       if (this.budgetManager.enabled) {
@@ -294,7 +298,7 @@ export class AIGateway {
       const totalPii = piiDetections.length + outputPiiDetections.length;
       const auditId = await this.auditStore.log({
         tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-        action: "chat", model, provider,
+        action: "chat", model: actualModel, provider: actualProvider,
         inputTokens: llmResponse.usage.inputTokens, outputTokens: llmResponse.usage.outputTokens,
         costUsd: cost.totalCost, durationMs,
         piiDetections: totalPii || undefined,
@@ -302,7 +306,7 @@ export class AIGateway {
 
       return {
         content: outputContent,
-        model, provider,
+        model: actualModel, provider: actualProvider,
         usage: llmResponse.usage,
         cost: { input: cost.inputCost, output: cost.outputCost, total: cost.totalCost },
         piiDetections: totalPii > 0 ? [
@@ -483,6 +487,61 @@ export class AIGateway {
     if (request.maxTokens !== undefined && (request.maxTokens < 1 || request.maxTokens > 200000)) {
       throw new BulwarkError("INVALID_REQUEST", "maxTokens must be between 1 and 200000");
     }
+  }
+
+  /**
+   * Call LLM with retry + fallback chain.
+   * Tries the primary model with retries, then falls back to configured alternatives.
+   */
+  private async callWithRetryAndFallback(
+    model: string,
+    messages: ChatRequest["messages"],
+    request: ChatRequest
+  ): Promise<{ response: { content: string; usage: { inputTokens: number; outputTokens: number; totalTokens: number } }; model: string; provider: GatewayProvider }> {
+    const modelsToTry = [model, ...(this.fallbacks[model] || [])];
+    let lastError: Error | undefined;
+
+    for (const currentModel of modelsToTry) {
+      let resolved: { provider: GatewayProvider; providerInstance: LLMProvider };
+      try {
+        resolved = this.resolveProvider(currentModel);
+      } catch {
+        continue; // provider not configured, try next fallback
+      }
+
+      for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
+        try {
+          const response = await this.callWithTimeout(
+            resolved.providerInstance.chat({
+              model: currentModel, messages,
+              temperature: request.temperature, maxTokens: request.maxTokens,
+              topP: request.topP, stop: request.stop, stream: request.stream,
+            }),
+            this.timeoutMs,
+            currentModel
+          );
+          return { response, model: currentModel, provider: resolved.provider };
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+
+          // Don't retry on non-retryable errors (auth, validation, etc.)
+          const isRetryable = err instanceof BulwarkError
+            ? this.retryConfig.retryableStatuses.includes(err.httpStatus)
+            : true; // Unknown errors are retryable
+
+          if (!isRetryable || attempt === this.retryConfig.maxRetries) break;
+
+          // Exponential backoff
+          const delay = this.retryConfig.baseDelayMs * Math.pow(2, attempt);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // All models exhausted
+    throw lastError instanceof BulwarkError
+      ? lastError
+      : new BulwarkError("LLM_ERROR", `All models failed. Last error: ${lastError?.message || "Unknown"}`, { triedModels: modelsToTry });
   }
 
   /** Call LLM with timeout */
