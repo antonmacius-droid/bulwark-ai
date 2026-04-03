@@ -1,0 +1,118 @@
+import type { PIIConfig, ContentPolicy } from "./security/types";
+import type { BudgetConfig } from "./billing/types";
+import type { RAGConfig } from "./rag/types";
+
+export interface ProviderConfig {
+  apiKey: string;
+  baseUrl?: string;
+  defaultModel?: string;
+}
+
+export type GatewayProvider = "openai" | "anthropic" | "mistral" | "google" | "ollama" | "azure" | "custom";
+
+export interface GatewayConfig {
+  /** LLM provider credentials */
+  providers: Partial<Record<GatewayProvider, ProviderConfig>>;
+
+  /** Database connection — SQLite path or Postgres URL */
+  database: string;
+
+  /** PII detection config */
+  pii?: PIIConfig | boolean;
+
+  /** Content policies */
+  policies?: ContentPolicy[];
+
+  /** Budget enforcement */
+  budgets?: BudgetConfig | boolean;
+
+  /** Audit logging — true = enabled with defaults */
+  audit?: boolean;
+
+  /** RAG knowledge base */
+  rag?: RAGConfig;
+
+  /** Multi-tenant mode */
+  multiTenant?: boolean;
+
+  /** Default model to use if not specified per request */
+  defaultModel?: string;
+
+  /** Model pricing overrides (per million tokens) */
+  modelPricing?: Record<string, { input: number; output: number }>;
+}
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  name?: string;
+}
+
+export interface ChatRequest {
+  /** Model name — auto-routes to correct provider */
+  model?: string;
+  messages: ChatMessage[];
+
+  /** User ID for budget/audit tracking */
+  userId?: string;
+  /** Team ID for team-level budgets */
+  teamId?: string;
+  /** Tenant ID for multi-tenant isolation */
+  tenantId?: string;
+
+  /** RAG knowledge base to search */
+  knowledgeBase?: string;
+
+  /** Override PII settings for this request */
+  pii?: boolean;
+  /** Override policies for this request */
+  skipPolicies?: boolean;
+
+  /** Streaming */
+  stream?: boolean;
+
+  /** Pass-through params (temperature, max_tokens, etc) */
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  stop?: string[];
+}
+
+export interface ChatResponse {
+  /** Generated text */
+  content: string;
+
+  /** Model used */
+  model: string;
+  /** Provider used */
+  provider: GatewayProvider;
+
+  /** Token usage */
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+
+  /** Cost in USD */
+  cost: {
+    input: number;
+    output: number;
+    total: number;
+  };
+
+  /** PII detections (if any were found and redacted) */
+  piiDetections?: { type: string; redacted: boolean }[];
+
+  /** Policy violations (if any) */
+  policyViolations?: { policy: string; action: "blocked" | "warned" }[];
+
+  /** RAG sources used */
+  sources?: { content: string; source: string; score: number }[];
+
+  /** Audit log entry ID */
+  auditId?: string;
+
+  /** Request duration in ms */
+  durationMs: number;
+}

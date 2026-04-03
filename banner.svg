@@ -1,0 +1,83 @@
+<svg width="1200" height="300" viewBox="0 0 1200 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="300" fill="#0A2540"/>
+  <defs>
+    <linearGradient id="glow" x1="0" y1="0" x2="1200" y2="300">
+      <stop offset="0%" stop-color="#635BFF" stop-opacity="0.15"/>
+      <stop offset="50%" stop-color="#80E9FF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#635BFF" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="60" y1="100" x2="100" y2="200">
+      <stop stop-color="#635BFF"/>
+      <stop offset="1" stop-color="#80E9FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" fill="url(#glow)"/>
+
+  <!-- Shield icon -->
+  <path d="M80 110L60 120v20c0 16.7 8.5 32.3 20 40 11.5-7.7 20-23.3 20-40v-20l-20-10z" stroke="url(#shield)" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Title -->
+  <text x="120" y="145" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="42" font-weight="800" fill="white" letter-spacing="-1">Bulwark AI</text>
+
+  <!-- Subtitle -->
+  <text x="120" y="175" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">Enterprise AI governance for any app</text>
+
+  <!-- Pipeline -->
+  <g transform="translate(120, 210)">
+    <rect x="0" y="0" width="80" height="28" rx="6" fill="rgba(99,91,255,0.15)" stroke="rgba(99,91,255,0.3)" stroke-width="1"/>
+    <text x="40" y="18" text-anchor="middle" font-family="monospace" font-size="10" fill="#80E9FF">PII Scan</text>
+
+    <text x="92" y="18" font-family="monospace" font-size="12" fill="rgba(255,255,255,0.2)">→</text>
+
+    <rect x="108" y="0" width="100" height="28" rx="6" fill="rgba(220,38,38,0.1)" stroke="rgba(220,38,38,0.3)" stroke-width="1"/>
+    <text x="158" y="18" text-anchor="middle" font-family="monospace" font-size="10" fill="#F87171">Injection Guard</text>
+
+    <text x="220" y="18" font-family="monospace" font-size="12" fill="rgba(255,255,255,0.2)">→</text>
+
+    <rect x="236" y="0" width="70" height="28" rx="6" fill="rgba(217,119,6,0.1)" stroke="rgba(217,119,6,0.3)" stroke-width="1"/>
+    <text x="271" y="18" text-anchor="middle" font-family="monospace" font-size="10" fill="#FBBF24">Policies</text>
+
+    <text x="318" y="18" font-family="monospace" font-size="12" fill="rgba(255,255,255,0.2)">→</text>
+
+    <rect x="334" y="0" width="65" height="28" rx="6" fill="rgba(5,150,105,0.1)" stroke="rgba(5,150,105,0.3)" stroke-width="1"/>
+    <text x="366" y="18" text-anchor="middle" font-family="monospace" font-size="10" fill="#34D399">Budget</text>
+
+    <text x="411" y="18" font-family="monospace" font-size="12" fill="rgba(255,255,255,0.2)">→</text>
+
+    <rect x="427" y="0" width="60" height="28" rx="6" fill="rgba(37,99,235,0.1)" stroke="rgba(37,99,235,0.3)" stroke-width="1"/>
+    <text x="457" y="18" text-anchor="middle" font-family="monospace" font-size="10" fill="#60A5FA">LLM</text>
+
+    <text x="499" y="18" font-family="monospace" font-size="12" fill="rgba(255,255,255,0.2)">→</text>
+
+    <rect x="515" y="0" width="55" height="28" rx="6" fill="rgba(99,91,255,0.15)" stroke="rgba(99,91,255,0.3)" stroke-width="1"/>
+    <text x="542" y="18" text-anchor="middle" font-family="monospace" font-size="10" fill="#80E9FF">Audit</text>
+  </g>
+
+  <!-- Right side badges -->
+  <g transform="translate(750, 100)">
+    <rect x="0" y="0" width="120" height="24" rx="4" fill="rgba(5,150,105,0.15)" stroke="rgba(5,150,105,0.3)" stroke-width="1"/>
+    <text x="60" y="16" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#34D399">125 tests passing</text>
+
+    <rect x="130" y="0" width="100" height="24" rx="4" fill="rgba(37,99,235,0.15)" stroke="rgba(37,99,235,0.3)" stroke-width="1"/>
+    <text x="180" y="16" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#60A5FA">6 LLM providers</text>
+
+    <rect x="240" y="0" width="90" height="24" rx="4" fill="rgba(99,91,255,0.15)" stroke="rgba(99,91,255,0.3)" stroke-width="1"/>
+    <text x="285" y="16" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#A78BFA">TypeScript</text>
+
+    <rect x="0" y="34" width="85" height="24" rx="4" fill="rgba(220,38,38,0.1)" stroke="rgba(220,38,38,0.3)" stroke-width="1"/>
+    <text x="42" y="50" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#F87171">15 PII types</text>
+
+    <rect x="95" y="34" width="115" height="24" rx="4" fill="rgba(217,119,6,0.1)" stroke="rgba(217,119,6,0.3)" stroke-width="1"/>
+    <text x="152" y="50" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#FBBF24">GDPR · SOC2 · HIPAA</text>
+
+    <rect x="220" y="34" width="110" height="24" rx="4" fill="rgba(5,150,105,0.1)" stroke="rgba(5,150,105,0.3)" stroke-width="1"/>
+    <text x="275" y="50" text-anchor="middle" font-family="monospace" font-size="11" font-weight="600" fill="#34D399">Self-hosted · MIT</text>
+  </g>
+
+  <!-- npm install -->
+  <g transform="translate(750, 200)">
+    <rect x="0" y="0" width="330" height="36" rx="8" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    <text x="12" y="23" font-family="'SF Mono', 'Fira Code', monospace" font-size="14" fill="rgba(255,255,255,0.4)">$</text>
+    <text x="28" y="23" font-family="'SF Mono', 'Fira Code', monospace" font-size="14" fill="#80E9FF">npm install @bulwark-ai/gateway</text>
+  </g>
+</svg>

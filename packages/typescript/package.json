@@ -1,0 +1,75 @@
+{
+  "name": "@bulwark-ai/gateway",
+  "version": "0.1.0",
+  "description": "Enterprise AI governance gateway — PII detection, budget control, audit logging, RAG, multi-tenant, admin UI. Drop into any Node.js app.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./admin": {
+      "types": "./dist/admin/index.d.ts",
+      "import": "./dist/admin/index.mjs",
+      "require": "./dist/admin/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "gateway",
+    "llm",
+    "governance",
+    "pii",
+    "gdpr",
+    "audit",
+    "openai",
+    "anthropic",
+    "multi-tenant",
+    "rag",
+    "enterprise",
+    "budget",
+    "compliance",
+    "security",
+    "admin"
+  ],
+  "author": "Bulwark AI",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "better-sqlite3": "^11.0.0",
+    "express": "^5.2.1",
+    "openai": "^4.80.0",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.14",
+    "@types/uuid": "^10.0.0",
+    "react": "^19.2.4",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "peerDependencies": {
+    "pg": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
