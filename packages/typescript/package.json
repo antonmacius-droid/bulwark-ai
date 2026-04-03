@@ -28,6 +28,14 @@
     "multi-tenant", "rag", "enterprise", "budget", "compliance",
     "security", "streaming", "rate-limit", "cost-tracking", "admin"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/antonmacius-droid/bulwark-ai"
+  },
+  "homepage": "https://github.com/antonmacius-droid/bulwark-ai#readme",
+  "bugs": {
+    "url": "https://github.com/antonmacius-droid/bulwark-ai/issues"
+  },
   "author": "Bulwark AI",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
