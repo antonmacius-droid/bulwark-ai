@@ -114,6 +114,8 @@ await gateway.chat({ model: "llama3.2", ... });            // → Ollama
 
 Azure OpenAI also supported via `AzureOpenAIProvider`.
 
+**SSRF Protection**: All provider `baseUrl` values are validated — private IPs, cloud metadata endpoints (169.254.169.254), and non-HTTPS URLs are blocked automatically.
+
 ### Retry + Fallback
 
 ```typescript
@@ -152,6 +154,7 @@ pii: {
 
 **Input**: PII redacted before sending to LLM. `"Contact john@test.com"` → `"Contact [EMAIL]"`
 **Output**: LLM response scanned and PII redacted before returning to user.
+**Credit card Luhn validation**: Only real card numbers are flagged (rejects random digit sequences).
 **ReDoS protected**: Malicious regex patterns (nested quantifiers) automatically rejected.
 **Security**: PII values are never stored in match objects or error responses — only type and position are recorded.
 
