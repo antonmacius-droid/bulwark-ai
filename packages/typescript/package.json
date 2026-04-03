@@ -22,23 +22,14 @@
   "keywords": [
     "ai",
     "gateway",
-    "llm",
-    "governance",
-    "pii",
-    "gdpr",
-    "audit",
-    "openai",
-    "anthropic",
-    "multi-tenant",
-    "rag",
-    "enterprise",
-    "budget",
-    "compliance",
-    "security",
-    "admin"
+    "ai", "llm", "gateway", "governance",
+    "pii", "prompt-injection", "gdpr", "soc2", "hipaa", "ccpa",
+    "audit", "openai", "anthropic", "mistral", "google", "ollama",
+    "multi-tenant", "rag", "enterprise", "budget", "compliance",
+    "security", "streaming", "rate-limit", "cost-tracking", "admin"
   ],
   "author": "Bulwark AI",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "better-sqlite3": "^11.0.0",
     "uuid": "^11.0.0"

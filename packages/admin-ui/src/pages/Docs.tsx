@@ -398,25 +398,22 @@ const tia = residency.generateTransferAssessment("openai");
   streaming: () => (
     <div>
       <h3 style={h3}>SSE Streaming</h3>
-      <div style={codeBlock}>{`import { createStreamAdapter } from "@bulwark-ai/gateway";
+      <div style={codeBlock}>{`// Gateway streaming — full governance pipeline runs BEFORE streaming starts
+const stream = gateway.chatStream({
+  model: "gpt-4o",
+  userId: "user-123",
+  messages: [{ role: "user", content: "Explain quantum computing" }],
+});
 
-app.post("/api/ai/stream", async (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
+for await (const event of stream) {
+  if (event.type === "sources") console.log("RAG sources:", event.sources);
+  if (event.type === "pii_warning") console.log("PII found:", event.piiTypes);
+  if (event.type === "delta") process.stdout.write(event.content);
+  if (event.type === "done") console.log("\\nCost:", event.cost);
+}
 
-  // Pre-flight checks run before streaming starts
-  // (PII, policies, budget, rate limit)
-
-  const stream = createStreamAdapter(providerStream, {
-    sources: ragResults,
-    piiWarnings: ["email"],
-  });
-
-  for await (const event of stream) {
-    res.write(\`event: \${event.type}\\ndata: \${JSON.stringify(event.data)}\\n\\n\`);
-  }
-  res.end();
-});`}</div>
+// Express SSE endpoint — use bulwarkRouter for automatic streaming
+// POST /api/ai/stream is included when you mount bulwarkRouter()`}</div>
       <h3 style={h3}>Response Caching</h3>
       <div style={codeBlock}>{`import { ResponseCache, RedisCacheStore } from "@bulwark-ai/gateway";
 

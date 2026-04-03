@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Bulwark AI! This document explain
 
 ```bash
 # Clone the repo
-git clone https://github.com/afkzona/bulwark-ai.git
+git clone https://github.com/antonmacius-droid/bulwark-ai.git
 cd bulwark-ai
 
 # Install dependencies

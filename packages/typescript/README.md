@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="banner.svg" alt="Bulwark AI" width="100%">
+  <img src="https://raw.githubusercontent.com/antonmacius-droid/bulwark-ai/main/banner.svg" alt="Bulwark AI" width="100%">
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ npm install @bulwark-ai/gateway
 **136 tests passing** (42 unit + 94 integration with real LLM calls) | **Zero type errors** | MIT + BSL 1.1
 
 <p align="center">
-  <img src="demo.svg" alt="Bulwark AI Pipeline" width="100%">
+  <img src="https://raw.githubusercontent.com/antonmacius-droid/bulwark-ai/main/demo.svg" alt="Bulwark AI Pipeline" width="100%">
 </p>
 
 ## Quick Start
@@ -65,7 +65,7 @@ const response = await gateway.chat({
 
 | Problem | Solution |
 |---------|---------|
-| Employees send PII to ChatGPT | Auto-detect & redact 15 PII types (input AND output) |
+| Employees send PII to ChatGPT | Auto-detect & redact 14 PII types (input AND output) |
 | No visibility into AI spend | Per-user/team budgets with real-time cost tracking |
 | Prompt injection attacks | Built-in guard with 20+ detection patterns |
 | No audit trail | Every request logged — user, model, tokens, cost, duration |
@@ -143,7 +143,7 @@ pii: {
   action: "redact",  // "block" | "redact" | "warn"
   types: ["email", "phone", "ssn", "credit_card", "iban",
           "ip_address", "passport", "name", "vat_number",
-          "national_id", "medical_id"],  // 15 built-in types
+          "national_id", "medical_id"],  // 14 built-in types
   customPatterns: [
     { name: "employee_id", pattern: "EMP-\\d{6}", action: "redact" },
   ],

@@ -96,7 +96,7 @@ export function SettingsPage({ apiBase }: { apiBase?: string }) {
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Configure gateway behavior, security, and compliance" />
+      <PageHeader title="Settings" subtitle="Current gateway configuration (read-only — configure via GatewayConfig in code)" />
 
       {data && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 24 }}>
@@ -154,12 +154,12 @@ export function SettingsPage({ apiBase }: { apiBase?: string }) {
                       padding: "9px 20px", borderRadius: 8, border: "none",
                       background: section.color, color: "white", fontSize: 13, fontWeight: 600,
                       cursor: "pointer", fontFamily: "inherit", transition: "opacity 150ms",
-                    }} onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")} onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>Save Changes</button>
+                    }} onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")} onMouseLeave={e => (e.currentTarget.style.opacity = "1")} onClick={() => alert("Settings are configured via GatewayConfig in code. This page shows the current configuration for reference.")}>Save Changes</button>
                     <button style={{
                       padding: "9px 20px", borderRadius: 8, border: "1px solid #E5E7EB",
                       background: "white", color: "#6B7280", fontSize: 13, fontWeight: 500,
                       cursor: "pointer", fontFamily: "inherit",
-                    }}>Reset</button>
+                    }} onClick={() => window.location.reload()}>Reset</button>
                   </div>
                 </div>
               )}
