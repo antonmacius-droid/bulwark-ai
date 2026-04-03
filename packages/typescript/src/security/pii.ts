@@ -51,7 +51,7 @@ export class PIIDetector {
       while ((match = regex.exec(text)) !== null) {
         matches.push({
           type,
-          value: match[0],
+          value: "[REDACTED]", // SECURITY: Never store raw PII values in match objects
           redacted: `[${type.toUpperCase()}]`,
           start: match.index,
           end: match.index + match[0].length,
@@ -76,7 +76,7 @@ export class PIIDetector {
             if (match[0].length === 0) { regex.lastIndex++; continue; }
             matches.push({
               type: custom.name as PIIType,
-              value: match[0],
+              value: "[REDACTED]",
               redacted: `[${custom.name.toUpperCase()}]`,
               start: match.index,
               end: match.index + match[0].length,

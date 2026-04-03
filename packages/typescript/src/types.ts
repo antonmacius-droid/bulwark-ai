@@ -41,6 +41,18 @@ export interface GatewayConfig {
   /** Model pricing overrides (per million tokens) */
   modelPricing?: Record<string, { input: number; output: number }>;
 
+  /** Prompt injection guard config */
+  promptGuard?: { enabled?: boolean; action?: "block" | "warn"; sensitivity?: "low" | "medium" | "high" };
+
+  /** LLM call timeout in ms (default: 120000) */
+  timeoutMs?: number;
+
+  /** Cache store for rate limiting + response caching */
+  cache?: unknown;
+
+  /** Rate limiting config */
+  rateLimit?: { enabled?: boolean; maxRequests?: number; windowSeconds?: number; scope?: "user" | "team" | "tenant" | "ip" };
+
   /** Retry config for failed LLM calls */
   retry?: {
     /** Max retry attempts (default: 2) */

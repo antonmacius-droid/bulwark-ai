@@ -39,12 +39,14 @@ export function createNextHandler(gateway: AIGateway, options?: {
       const body = await req.json() as Record<string, unknown>;
       const authCtx = options?.auth?.(req) || {};
 
+      // SECURITY: Auth context ALWAYS overrides body — prevents auth bypass
+      const { messages, model, temperature, maxTokens, topP, stop, knowledgeBase } = body as Record<string, unknown>;
       const response = await gateway.chat({
-        ...(body as unknown as ChatRequest),
-        userId: (authCtx.userId || body.userId) as string | undefined,
-        teamId: (authCtx.teamId || body.teamId) as string | undefined,
-        tenantId: (authCtx.tenantId || body.tenantId) as string | undefined,
-      });
+        messages, model, temperature, maxTokens, topP, stop, knowledgeBase,
+        userId: authCtx.userId,
+        teamId: authCtx.teamId,
+        tenantId: authCtx.tenantId,
+      } as ChatRequest);
 
       return jsonResponse(response);
     } catch (err: unknown) {
@@ -56,16 +58,21 @@ export function createNextHandler(gateway: AIGateway, options?: {
   };
 }
 
-export function createNextAuditHandler(gateway: AIGateway) {
+export function createNextAuditHandler(gateway: AIGateway, options?: {
+  auth?: (req: RequestLike) => { userId?: string; teamId?: string; tenantId?: string } | null;
+}) {
   return async function GET(req: RequestLike) {
+    const authCtx = options?.auth?.(req);
+    if (!authCtx) return jsonResponse({ error: "Authentication required", code: "UNAUTHORIZED" }, 401);
+
     const params = req.nextUrl?.searchParams || new URL(req.url || "http://localhost").searchParams;
     const limit = Math.min(Math.max(1, Number(params.get("limit")) || 50), 1000);
     const offset = Math.max(0, Number(params.get("offset")) || 0);
 
     const entries = await gateway.audit.query({
-      userId: params.get("userId") || undefined,
+      userId: authCtx.userId || params.get("userId") || undefined,
       teamId: params.get("teamId") || undefined,
-      tenantId: params.get("tenantId") || undefined,
+      tenantId: authCtx.tenantId || params.get("tenantId") || undefined,
       action: params.get("action") || undefined,
       from: params.get("from") || undefined,
       to: params.get("to") || undefined,

@@ -7,7 +7,7 @@ describe("PIIDetector", () => {
     const result = detector.scan("Contact john@example.com for details");
     expect(result.matches).toHaveLength(1);
     expect(result.matches[0].type).toBe("email");
-    expect(result.matches[0].value).toBe("john@example.com");
+    expect(result.matches[0].value).toBe("[REDACTED]"); // PII values are never stored
     expect(result.blocked).toBe(false);
     expect(result.redacted).toBe(false);
   });
@@ -66,7 +66,7 @@ describe("PIIDetector", () => {
 
     const goodMatches = result.matches.filter(m => m.type === "good");
     expect(goodMatches).toHaveLength(1);
-    expect(goodMatches[0].value).toBe("555-1234");
+    expect(goodMatches[0].value).toBe("[REDACTED]"); // PII values are never stored
 
     // Evil patterns should NOT have any matches (they were skipped)
     const evilMatches = result.matches.filter(m => m.type === "evil" || m.type === "evil2");

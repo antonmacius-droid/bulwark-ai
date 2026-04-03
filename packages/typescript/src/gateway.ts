@@ -84,7 +84,7 @@ export class AIGateway {
       typeof config.pii === "boolean" ? { enabled: config.pii, action: "warn" } : config.pii || { enabled: false }
     );
     this.promptGuard = new PromptGuard(
-      (config as GatewayConfig & { promptGuard?: PromptGuardConfig }).promptGuard || { enabled: true, action: "block", sensitivity: "medium" }
+      config.promptGuard as PromptGuardConfig || { enabled: true, action: "block", sensitivity: "medium" }
     );
     this._policyEngine = new PolicyEngine(config.policies || []);
     this.costCalculator = new CostCalculator(config.modelPricing);
@@ -93,7 +93,7 @@ export class AIGateway {
       typeof config.budgets === "boolean" ? { enabled: config.budgets } : config.budgets || { enabled: false }
     );
     this.auditStore = createAuditStore(this.db);
-    this.timeoutMs = (config as GatewayConfig & { timeoutMs?: number }).timeoutMs || DEFAULT_TIMEOUT_MS;
+    this.timeoutMs = config.timeoutMs || DEFAULT_TIMEOUT_MS;
     this.retryConfig = {
       maxRetries: config.retry?.maxRetries ?? 2,
       baseDelayMs: config.retry?.baseDelayMs ?? 1000,
@@ -102,10 +102,10 @@ export class AIGateway {
     this.fallbacks = config.fallbacks || {};
 
     // Cache — Redis or in-memory
-    this.cache = (config as GatewayConfig & { cache?: CacheStore }).cache || new MemoryCacheStore();
+    this.cache = (config.cache as CacheStore) || new MemoryCacheStore();
 
     // Rate limiter
-    const rlConfig = (config as GatewayConfig & { rateLimit?: RateLimitConfig }).rateLimit;
+    const rlConfig = config.rateLimit as RateLimitConfig | undefined;
     if (rlConfig?.enabled) {
       this.rateLimiter = new RateLimiter(this.cache, rlConfig);
     }
@@ -350,33 +350,38 @@ export class AIGateway {
     const start = Date.now();
 
     try {
-      // Run all pre-flight checks (same as non-streaming)
+      // Run all pre-flight checks — IDENTICAL to non-streaming chat()
       this.validateRequest(request);
       const model = request.model || "gpt-4o";
-      const { provider, providerInstance } = this.resolveProvider(model);
 
-      // Prompt injection check
+      // Prompt injection — scan ALL user messages (not just last)
       let messages = [...request.messages];
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg?.role === "user") {
-        const guardResult = this.promptGuard.scan(lastMsg.content);
-        if (!guardResult.safe && !guardResult.sanitizedText) {
-          throw new BulwarkError("PROMPT_INJECTION", `Prompt injection detected: ${guardResult.injections.map(i => i.pattern).join(", ")}`);
-        }
-        if (guardResult.sanitizedText) {
-          messages = [...messages.slice(0, -1), { ...lastMsg, content: guardResult.sanitizedText }];
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        if (msg.role === "user") {
+          const guardResult = this.promptGuard.scan(msg.content);
+          if (!guardResult.safe) {
+            if (guardResult.sanitizedText) {
+              messages = [...messages.slice(0, i), { ...msg, content: guardResult.sanitizedText }, ...messages.slice(i + 1)];
+            } else {
+              throw new BulwarkError("PROMPT_INJECTION", `Prompt injection detected in message ${i}: ${guardResult.injections.map(j => j.pattern).join(", ")}`, { injections: guardResult.injections });
+            }
+          }
         }
       }
 
-      // PII scan on input
+      // PII scan — scan ALL user messages (not just last)
       const piiTypes: string[] = [];
       if (request.pii !== false) {
-        const userMsg = messages[messages.length - 1];
-        if (userMsg?.role === "user") {
-          const result = this.piiDetector.scan(userMsg.content);
+        for (let i = 0; i < messages.length; i++) {
+          const msg = messages[i];
+          if (msg.role !== "user") continue;
+          const result = this.piiDetector.scan(msg.content);
           piiTypes.push(...result.matches.map(m => m.type));
-          if (result.blocked) throw new BulwarkError("PII_BLOCKED", "PII detected and blocked");
-          if (result.redacted) messages = [...messages.slice(0, -1), { ...userMsg, content: result.text }];
+          if (result.blocked) throw new BulwarkError("PII_BLOCKED", `PII detected and blocked in message ${i}`);
+          if (result.redacted) {
+            messages = [...messages.slice(0, i), { ...msg, content: result.text }, ...messages.slice(i + 1)];
+          }
         }
       }
 
@@ -397,6 +402,15 @@ export class AIGateway {
         if (!allowed.ok) throw new BulwarkError("BUDGET_EXCEEDED", "Budget exceeded");
       }
 
+      // System prompt hardening (was missing in streaming mode)
+      const hasSystemMsg = messages.some(m => m.role === "system");
+      if (hasSystemMsg) {
+        messages = messages.map(m => m.role === "system"
+          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: !!this.piiDetector }) }
+          : m
+        );
+      }
+
       // RAG
       let sources: ChatResponse["sources"] = undefined;
       if (request.knowledgeBase && this.kb) {
@@ -404,12 +418,18 @@ export class AIGateway {
         if (results.length > 0) {
           sources = results.map(r => ({ content: r.chunk.content, source: r.chunk.sourceName, score: r.score }));
           const context = results.map((r, i) => `[${i + 1}] ${r.chunk.sourceName}: ${r.chunk.content}`).join("\n\n");
-          const ragInstruction = `\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`;
-          const sysMsg = messages.find(m => m.role === "system");
-          if (sysMsg) messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
-          else messages = [{ role: "system", content: "You are a helpful assistant." + ragInstruction }, ...messages];
+          const ragInstruction = `\n\nUse ONLY the following knowledge base context to answer. Cite sources using [1], [2] etc.\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`;
+          if (hasSystemMsg) {
+            messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
+          } else {
+            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: !!this.piiDetector });
+            messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
+          }
         }
       }
+
+      // Resolve provider for streaming
+      const { provider, providerInstance } = this.resolveProvider(model);
 
       // Emit pre-flight results
       if (sources) yield { type: "sources", sources };
@@ -637,7 +657,7 @@ export class BulwarkError extends Error {
   get httpStatus(): number {
     const map: Record<string, number> = {
       INVALID_REQUEST: 400, INVALID_CONFIG: 400,
-      PII_BLOCKED: 403, POLICY_BLOCKED: 403,
+      PII_BLOCKED: 403, POLICY_BLOCKED: 403, PROMPT_INJECTION: 400,
       PROVIDER_NOT_CONFIGURED: 404,
       RATE_LIMITED: 429, BUDGET_EXCEEDED: 429,
       LLM_TIMEOUT: 504, LLM_ERROR: 502,

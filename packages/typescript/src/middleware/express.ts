@@ -47,9 +47,10 @@ export function bulwarkRouter(gateway: AIGateway, options?: {
     try {
       const authCtx = options?.auth?.(req) || {};
       // Auth context ALWAYS overrides body — prevents auth bypass via JSON
-      const { messages, model, temperature, maxTokens, topP, stop, knowledgeBase, pii, skipPolicies, stream: _stream } = req.body;
+      // SECURITY: Only whitelist safe fields from body. Never accept pii/skipPolicies from client.
+      const { messages, model, temperature, maxTokens, topP, stop, knowledgeBase } = req.body;
       const response = await gateway.chat({
-        messages, model, temperature, maxTokens, topP, stop, knowledgeBase, pii, skipPolicies,
+        messages, model, temperature, maxTokens, topP, stop, knowledgeBase,
         userId: authCtx.userId,
         teamId: authCtx.teamId,
         tenantId: authCtx.tenantId,
@@ -78,9 +79,9 @@ export function bulwarkRouter(gateway: AIGateway, options?: {
 
     try {
       const authCtx = options?.auth?.(req) || {};
-      const { messages, model, temperature, maxTokens, topP, stop, knowledgeBase, pii, skipPolicies } = req.body;
+      const { messages, model, temperature, maxTokens, topP, stop, knowledgeBase } = req.body;
       const stream = gateway.chatStream({
-        messages, model, temperature, maxTokens, topP, stop, knowledgeBase, pii, skipPolicies,
+        messages, model, temperature, maxTokens, topP, stop, knowledgeBase,
         userId: authCtx.userId,
         teamId: authCtx.teamId,
         tenantId: authCtx.tenantId,

@@ -81,12 +81,17 @@ export class PolicyEngine {
 
         case "regex_block":
           if (policy.regex) {
-            const regex = new RegExp(policy.regex, "gi");
-            const match = regex.exec(text);
-            if (match) {
-              violated = true;
-              matchedPattern = match[0];
-            }
+            // ReDoS protection — reject patterns with nested quantifiers
+            if (/\([^)]*[+*][^)]*\)[+*]/.test(policy.regex)) break;
+            if (/(\.\*){3,}/.test(policy.regex)) break;
+            try {
+              const regex = new RegExp(policy.regex, "gi");
+              const match = regex.exec(text);
+              if (match) {
+                violated = true;
+                matchedPattern = match[0];
+              }
+            } catch { /* invalid regex — skip */ }
           }
           break;
 

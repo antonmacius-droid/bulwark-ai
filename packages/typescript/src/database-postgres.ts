@@ -2,6 +2,10 @@
  * PostgreSQL database adapter.
  * Requires `pg` as a peer dependency.
  *
+ * WARNING: This adapter is EXPERIMENTAL and NOT production-ready.
+ * The sync Database interface is incompatible with pg's async nature.
+ * Use SQLite for production until the async database layer ships in v0.2.
+ *
  * @example
  * ```ts
  * const gateway = new AIGateway({

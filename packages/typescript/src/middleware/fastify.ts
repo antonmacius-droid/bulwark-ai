@@ -33,12 +33,14 @@ export function bulwarkPlugin(
       const request = req as { body: Record<string, unknown> };
       const authCtx = auth?.(req) || {};
       const body = request.body;
+      // SECURITY: Auth context ALWAYS overrides body — prevents auth bypass
+      const { messages, model, temperature, maxTokens, topP, stop, knowledgeBase } = body as Record<string, unknown>;
       const response = await gateway.chat({
-        ...body as unknown as Parameters<typeof gateway.chat>[0],
-        userId: (authCtx.userId || body.userId) as string | undefined,
-        teamId: (authCtx.teamId || body.teamId) as string | undefined,
-        tenantId: (authCtx.tenantId || body.tenantId) as string | undefined,
-      });
+        messages, model, temperature, maxTokens, topP, stop, knowledgeBase,
+        userId: authCtx.userId,
+        teamId: authCtx.teamId,
+        tenantId: authCtx.tenantId,
+      } as Parameters<typeof gateway.chat>[0]);
       return reply.send(response);
     } catch (err: unknown) {
       if (err instanceof BulwarkError) {
@@ -49,9 +51,13 @@ export function bulwarkPlugin(
   });
 
   fastify.get(`${options.prefix || ""}/audit`, async (req: unknown, reply: FastifyReply) => {
+    const authCtx = auth?.(req);
+    if (!authCtx) return reply.status(401).send({ error: "Authentication required", code: "UNAUTHORIZED" });
+
     const q = (req as { query: Record<string, string> }).query;
     const entries = await gateway.audit.query({
-      userId: q.userId, teamId: q.teamId, tenantId: q.tenantId,
+      userId: authCtx.userId || q.userId, teamId: q.teamId,
+      tenantId: authCtx.tenantId || q.tenantId,
       action: q.action, from: q.from, to: q.to,
       limit: Math.min(Number(q.limit) || 50, 1000),
       offset: Math.max(Number(q.offset) || 0, 0),

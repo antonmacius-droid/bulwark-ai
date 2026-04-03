@@ -147,6 +147,7 @@ class SQLiteDatabase implements Database {
 /** Create database instance based on connection string */
 export function createDatabase(connection: string): Database {
   if (connection.startsWith("postgres://") || connection.startsWith("postgresql://")) {
+    console.warn("[bulwark] WARNING: Postgres adapter is EXPERIMENTAL and NOT production-ready. Governance controls may not work reliably. Use SQLite for production until async DB layer ships in v0.2.");
     const { PostgresDatabase } = require("./database-postgres");
     return new PostgresDatabase(connection);
   }
