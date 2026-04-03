@@ -309,6 +309,117 @@ curl http://localhost:3100/v1/chat \
   -d '{"model": "gpt-4o", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
+## Integration Guides
+
+### Add to Existing Express App (5 min)
+
+```typescript
+// 1. Install
+// npm install @bulwark-ai/gateway
+
+// 2. Create gateway (once, at app startup)
+import { AIGateway, bulwarkRouter } from "@bulwark-ai/gateway";
+
+const gateway = new AIGateway({
+  providers: { openai: { apiKey: process.env.OPENAI_API_KEY! } },
+  database: "bulwark.db",
+  pii: { enabled: true, action: "redact" },
+  budgets: { enabled: true, defaultUserLimit: 500_000 },
+  audit: true,
+});
+
+// 3. Mount (one line)
+app.use("/api/ai", bulwarkRouter(gateway, {
+  auth: (req) => ({ userId: req.user.id, teamId: req.user.team }),
+}));
+
+// That's it. POST /api/ai/chat now has full governance.
+```
+
+### Add to Next.js App Router (5 min)
+
+```typescript
+// app/api/ai/chat/route.ts
+import { AIGateway, createNextHandler } from "@bulwark-ai/gateway";
+
+const gateway = new AIGateway({ /* same config */ });
+
+export const POST = createNextHandler(gateway, {
+  auth: (req) => ({
+    userId: req.headers.get("x-user-id") || undefined,
+  }),
+});
+```
+
+### Add to Fastify (5 min)
+
+```typescript
+import { AIGateway, bulwarkPlugin } from "@bulwark-ai/gateway";
+
+const gateway = new AIGateway({ /* same config */ });
+
+app.register(bulwarkPlugin, {
+  gateway,
+  prefix: "/api/ai",
+  auth: (req) => ({ userId: req.headers["x-user-id"] }),
+});
+```
+
+### Programmatic Usage (No Framework)
+
+```typescript
+// Use the gateway directly — no HTTP framework needed
+const gateway = new AIGateway({ /* config */ });
+await gateway.init();
+
+const response = await gateway.chat({
+  model: "gpt-4o",
+  userId: "user-123",
+  messages: [{ role: "user", content: "Hello" }],
+});
+
+// Streaming
+for await (const event of gateway.chatStream({ /* same params */ })) {
+  if (event.type === "delta") process.stdout.write(event.content);
+}
+```
+
+## Best Practices
+
+**Start small, add incrementally:**
+1. Start with `pii` + `audit` — instant visibility into what data flows through your AI
+2. Add `budgets` when you need cost control — set generous limits first, tighten later
+3. Add `policies` for specific compliance needs (block secrets, restrict topics)
+4. Add `rag` when you need document-grounded answers
+5. Add `fallbacks` for production reliability
+
+**Multi-tenant SaaS:**
+- Always pass `tenantId` from your auth layer — never from the request body
+- Each tenant's data is isolated: RAG, audit, budgets, usage
+- Use `gateway.tenants` API to manage tenant lifecycle
+
+**Production checklist:**
+- [ ] SQLite database with regular backups (Postgres support is experimental)
+- [ ] PII detection enabled with `action: "redact"`
+- [ ] Budget limits set per user and team
+- [ ] Auth function validates tokens (never trust request body for identity)
+- [ ] `BULWARK_LICENSE_KEY` set if using RAG/compliance modules commercially
+- [ ] Graceful shutdown: `process.on("SIGTERM", () => gateway.shutdown())`
+- [ ] Monitor audit logs for anomalies (see SOC 2 module)
+
+## Use Cases
+
+| Use Case | Key Features |
+|----------|-------------|
+| **Internal AI chatbot** | PII redaction, audit trail, budget per department |
+| **Customer-facing AI** | Prompt injection guard, content policies, rate limiting |
+| **Multi-tenant SaaS** | Tenant isolation, per-org budgets, separate KB per tenant |
+| **Healthcare AI** | HIPAA PHI logging, PII blocking, audit immutability |
+| **EU compliance** | GDPR erasure/export, data residency checks, PII redaction |
+| **Document Q&A** | RAG knowledge base, source citations, chunking strategies |
+| **AI cost management** | Per-user budgets, alert thresholds, cost tracking per model |
+| **Security-first AI** | Prompt hardening, injection guard, SSRF protection |
+
 ## Architecture
 
 ```
