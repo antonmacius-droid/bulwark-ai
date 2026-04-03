@@ -449,6 +449,19 @@ for await (const event of gateway.chatStream({ /* same params */ })) {
 | **AI cost management** | Per-user budgets, alert thresholds, cost tracking per model |
 | **Security-first AI** | Prompt hardening, injection guard, SSRF protection |
 
+## KB Chat — "Chat with Your Docs"
+
+Standalone knowledge base chat app included. Upload documents, chat with AI that references them.
+
+```bash
+cd packages/kb-chat
+npm install
+npx tsx server.ts    # API on :3200
+npm run dev          # UI on :3201
+```
+
+Enter your OpenAI key → drag-and-drop documents → chat with source citations. Self-hosted, private, your data never leaves your machine.
+
 ## Architecture
 
 ```
@@ -528,26 +541,47 @@ Run integration tests: `OPENAI_API_KEY=sk-xxx npx vitest run src/__tests__/integ
 
 | Feature | Bulwark | LiteLLM | Portkey | Helicone |
 |---------|---------|---------|---------|----------|
+| **Deployment** | | | | |
 | Self-hosted | Yes | Yes | No (SaaS) | Partial |
-| TypeScript | Yes | No (Python) | No | No |
-| Embeddable | Yes (`npm install`) | No (proxy) | No | No |
-| PII Detection | 15 types + custom | Plugin | Partial | No |
-| Output PII Scan | Yes | No | No | No |
-| Output PII Protection | Yes (non-streaming) | No | No | No |
+| Embeddable (`npm install`) | Yes | No (proxy) | No | No |
+| Docker Compose | Yes | Yes | No | No |
+| TypeScript-native | Yes | No (Python) | No | No |
+| **Security** | | | | |
+| PII Detection | 14 types + custom + Luhn | Plugin | Partial | No |
+| Output PII Scan | Yes (input + output) | No | No | No |
 | Prompt Injection Guard | 20+ patterns | No | No | No |
-| Budget Control | Per-user/team | Yes | Yes | No |
-| Audit Log | Yes | Yes | Yes | Yes |
-| Multi-Tenant | Yes | No | No | No |
-| Content Policies | 4 types, scoped | Plugin | Partial | No |
-| RAG/KB | Built-in | No | No | No |
+| System Prompt Hardening | Yes | No | No | No |
+| SSRF Protection | Yes | No | N/A | N/A |
+| Content Policies | 4 types, team-scoped | Plugin | Partial | No |
+| ReDoS Protection | Yes (PII + policies) | No | No | No |
+| Auth Bypass Prevention | Yes (whitelist body) | No | N/A | N/A |
+| **Governance** | | | | |
+| Budget Control | Per-user/team/tenant | Yes | Yes | No |
+| Rate Limiting | Yes (memory + Redis) | Yes | Yes | No |
+| Audit Log | Yes (immutable) | Yes | Yes | Yes |
+| Multi-Tenant Isolation | Yes (data + query) | No | No | No |
+| Config Presets | strict/balanced/dev | No | No | No |
+| Fail Mode | fail-open/fail-closed | No | No | No |
+| Kill Switch | Yes (runtime toggle) | No | No | No |
+| Debug/Trace Mode | Yes | No | No | Yes |
+| **AI Features** | | | | |
+| LLM Providers | 6 + Azure | 100+ | Many | Many |
+| Retry + Fallback | Yes (cross-provider) | Yes | Yes | No |
+| RAG Knowledge Base | Built-in | No | No | No |
+| KB Chat App | Yes (standalone) | No | No | No |
 | Streaming (SSE) | Yes | Yes | Yes | Yes |
-| GDPR Module | Yes | No | No | No |
-| SOC 2 Module | Yes | No | No | No |
-| Admin UI | Yes | Separate | SaaS | SaaS |
-| Redis Support | Yes | No | N/A | N/A |
-| Providers | 6 | 100+ | Many | Many |
-| Retry + Fallback | Yes | Yes | Yes | No |
-| Test Suite | 136 tests | ? | ? | ? |
+| Metadata Tagging | Yes | No | Yes | Yes |
+| **Compliance** | | | | |
+| GDPR | Yes (erasure, export, retention) | No | No | No |
+| SOC 2 | Yes (anomaly, vendor, change log) | No | No | No |
+| HIPAA | Yes (PHI logging, BAA tracking) | No | No | No |
+| CCPA | Yes (access, delete, opt-out, GPC) | No | No | No |
+| Data Residency | Yes (region checks, TIA) | No | No | No |
+| **Developer Experience** | | | | |
+| Admin UI | Yes (9 pages) | Separate | SaaS | SaaS |
+| Express/Next.js/Fastify | Yes (3 middleware) | No | No | No |
+| Test Suite | 136 real LLM tests | ? | ? | ? |
+| Integration Examples | 4 (Express, Next, Fastify, RAG) | Yes | Yes | Yes |
 
 ## License
 
