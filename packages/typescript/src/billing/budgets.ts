@@ -12,6 +12,8 @@ export class BudgetManager {
   enabled: boolean;
   private config: BudgetConfig;
   private db: Database;
+  /** Tracks which thresholds have already been crossed per scope to avoid duplicate alerts */
+  private crossedThresholds = new Map<string, Set<number>>();
 
   constructor(db: Database, config: BudgetConfig) {
     this.db = db;
@@ -40,10 +42,14 @@ export class BudgetManager {
         return { ok: this.config.onExceeded !== "block", used, limit, costUsd: row?.total_cost || 0 };
       }
 
-      // Check alert thresholds
+      // Check alert thresholds — only fire on first crossing
       if (limit > 0 && this.config.alertThresholds && this.config.onAlert) {
+        const scopeKey = `user:${scope.userId}`;
+        if (!this.crossedThresholds.has(scopeKey)) this.crossedThresholds.set(scopeKey, new Set());
+        const crossed = this.crossedThresholds.get(scopeKey)!;
         for (const threshold of this.config.alertThresholds) {
-          if (used / limit >= threshold) {
+          if (used / limit >= threshold && !crossed.has(threshold)) {
+            crossed.add(threshold);
             this.config.onAlert({ type: "user", id: scope.userId, threshold, used, limit, costUsd: row?.total_cost || 0 });
           }
         }

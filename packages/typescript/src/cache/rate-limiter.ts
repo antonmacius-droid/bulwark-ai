@@ -19,10 +19,8 @@ export class RateLimiter {
     const windowKey = `ratelimit:${this.config.scope}:${scopeId}:${this.currentWindow()}`;
     const count = await this.store.incr(windowKey);
 
-    // Set expiry on first request in window
-    if (count === 1) {
-      await this.store.expire(windowKey, this.config.windowSeconds);
-    }
+    // Always set/refresh expiry to ensure the key is cleaned up
+    await this.store.expire(windowKey, this.config.windowSeconds);
 
     const remaining = Math.max(0, this.config.maxRequests - count);
     const resetAt = Math.ceil(Date.now() / 1000 / this.config.windowSeconds) * this.config.windowSeconds * 1000;

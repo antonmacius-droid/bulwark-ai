@@ -8,6 +8,9 @@ import { checkLicense } from "../rag/license-check";
 
 import type { Database } from "../database";
 
+/** Package version — update alongside package.json */
+const BULWARK_VERSION = "0.1.0";
+
 export interface SOC2Config {
   /** Enable immutable audit mode — prevents DELETE on audit table */
   immutableAudit?: boolean;
@@ -213,7 +216,7 @@ export class SOC2Manager {
       providers: {}, // consumer should populate from their provider config
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       activeRequests,
-      version: "0.1.0",
+      version: BULWARK_VERSION,
     };
   }
 }

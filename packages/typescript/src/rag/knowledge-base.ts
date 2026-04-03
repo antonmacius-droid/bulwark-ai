@@ -149,7 +149,13 @@ export class KnowledgeBase {
   listSources(tenantId?: string): KnowledgeSource[] {
     let sql = "SELECT * FROM bulwark_knowledge_sources";
     const params: unknown[] = [];
-    if (tenantId) { sql += " WHERE tenant_id = ?"; params.push(tenantId); }
+    if (tenantId) {
+      sql += " WHERE tenant_id = ?";
+      params.push(tenantId);
+    } else {
+      // No tenantId — only return global (non-tenant) sources, same pattern as search()
+      sql += " WHERE (tenant_id IS NULL OR tenant_id = '')";
+    }
     sql += " ORDER BY created_at DESC";
     return this.db.queryAll<KnowledgeSource>(sql, params);
   }

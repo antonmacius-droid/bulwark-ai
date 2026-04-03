@@ -55,6 +55,7 @@ export class GDPRManager {
   eraseUserData(userId: string): { audit: number; usage: number; chunks: number } {
     const audit = this.deleteAndCount("DELETE FROM bulwark_audit WHERE user_id = ?", userId);
     const usage = this.deleteAndCount("DELETE FROM bulwark_usage WHERE user_id = ?", userId);
+    // NOTE: chunks don't reliably store userId in metadata — this is a best-effort match
     const chunks = this.deleteAndCount("DELETE FROM bulwark_chunks WHERE metadata LIKE ?", `%"userId":"${userId}"%`);
     return { audit, usage, chunks };
   }
@@ -136,9 +137,12 @@ export class GDPRManager {
 
   private deleteAndCount(sql: string, param: string): number {
     try {
+      // Count matching rows before deleting
+      const countSql = sql.replace(/^DELETE FROM/, "SELECT COUNT(*) as c FROM");
+      const row = this.db.queryOne<{ c: number }>(countSql, [param]);
+      const count = row?.c || 0;
       this.db.run(sql, [param]);
-      // SQLite doesn't return affected rows from run(), so we count before/after
-      return 0; // Approximate — in production use changes() or RETURNING
+      return count;
     } catch {
       return 0;
     }

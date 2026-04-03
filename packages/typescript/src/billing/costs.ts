@@ -16,13 +16,23 @@ export class CostCalculator {
 
     return {
       model,
-      provider: model.startsWith("claude") ? "anthropic" : "openai",
+      provider: this.detectProvider(model),
       inputTokens,
       outputTokens,
       inputCost: Math.round(inputCost * 1_000_000) / 1_000_000, // 6 decimal places
       outputCost: Math.round(outputCost * 1_000_000) / 1_000_000,
       totalCost: Math.round((inputCost + outputCost) * 1_000_000) / 1_000_000,
     };
+  }
+
+  /** Detect provider from model name */
+  private detectProvider(model: string): string {
+    const m = model.toLowerCase();
+    if (m.startsWith("claude")) return "anthropic";
+    if (m.startsWith("mistral") || m.startsWith("codestral") || m.startsWith("pixtral")) return "mistral";
+    if (m.startsWith("gemini") || m.startsWith("palm")) return "google";
+    if (m.startsWith("llama") || m.startsWith("phi") || m.startsWith("qwen") || m.startsWith("deepseek") || m.startsWith("codellama")) return "ollama";
+    return "openai";
   }
 
   /** Update pricing for a model */

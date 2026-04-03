@@ -12,6 +12,7 @@ import { AnthropicProvider } from "./providers/anthropic";
 import { MistralProvider } from "./providers/mistral";
 import { GoogleProvider } from "./providers/google";
 import { OllamaProvider } from "./providers/ollama";
+import { AzureOpenAIProvider } from "./providers/azure-openai";
 import type { LLMProvider } from "./providers/base";
 import type { AuditStore } from "./audit/types";
 import { KnowledgeBase } from "./rag/knowledge-base";
@@ -116,6 +117,7 @@ export class AIGateway {
     if (config.providers.mistral) this.providers.set("mistral", new MistralProvider(config.providers.mistral));
     if (config.providers.google) this.providers.set("google", new GoogleProvider(config.providers.google));
     if (config.providers.ollama) this.providers.set("ollama", new OllamaProvider(config.providers.ollama));
+    if (config.providers.azure) this.providers.set("azure", new AzureOpenAIProvider(config.providers.azure));
 
     // Knowledge base
     if (config.rag?.enabled && config.providers.openai?.apiKey) {
@@ -241,7 +243,7 @@ export class AIGateway {
       // Harden existing system prompt or inject one
       if (hasSystemMsg) {
         messages = messages.map(m => m.role === "system"
-          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: !!this.piiDetector }) }
+          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false }) }
           : m
         );
       }
@@ -260,7 +262,7 @@ export class AIGateway {
           if (hasSystemMsg) {
             messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
           } else {
-            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: !!this.piiDetector });
+            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false });
             messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
           }
         }
@@ -406,7 +408,7 @@ export class AIGateway {
       const hasSystemMsg = messages.some(m => m.role === "system");
       if (hasSystemMsg) {
         messages = messages.map(m => m.role === "system"
-          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: !!this.piiDetector }) }
+          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false }) }
           : m
         );
       }
@@ -422,7 +424,7 @@ export class AIGateway {
           if (hasSystemMsg) {
             messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
           } else {
-            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: !!this.piiDetector });
+            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false });
             messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
           }
         }
@@ -589,6 +591,8 @@ export class AIGateway {
     if (m.startsWith("gemini") || m.startsWith("palm")) return this.getProvider("google");
     // Ollama (local models)
     if (m.startsWith("llama") || m.startsWith("phi") || m.startsWith("qwen") || m.startsWith("deepseek") || m.startsWith("codellama")) return this.getProvider("ollama");
+    // Azure — if configured and model doesn't match any other prefix, prefer Azure over OpenAI
+    if (this.providers.has("azure")) return this.getProvider("azure");
     // Default: OpenAI
     return this.getProvider("openai");
   }

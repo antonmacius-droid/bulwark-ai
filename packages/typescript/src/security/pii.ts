@@ -19,6 +19,24 @@ const PII_PATTERNS: Record<PIIType, RegExp> = {
   medical_id: /\b(?:NHS|EHIC|SVN|AMM)[-\s]?\d{6,12}\b/gi,
 };
 
+/** Luhn algorithm — validates credit card numbers */
+function luhnCheck(num: string): boolean {
+  const digits = num.replace(/[\s-]/g, "");
+  if (!/^\d+$/.test(digits) || digits.length < 13) return false;
+  let sum = 0;
+  let alternate = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let n = parseInt(digits[i], 10);
+    if (alternate) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alternate = !alternate;
+  }
+  return sum % 10 === 0;
+}
+
 export interface ScanResult {
   text: string;
   matches: PIIMatch[];
@@ -27,17 +45,20 @@ export interface ScanResult {
 }
 
 export class PIIDetector {
-  private config: PIIConfig;
+  private _config: PIIConfig;
   private activeTypes: PIIType[];
 
   constructor(config: PIIConfig) {
-    this.config = config;
+    this._config = config;
     this.activeTypes = config.types || ["email", "phone", "ssn", "credit_card", "iban"];
   }
 
+  /** Whether PII detection is enabled */
+  get config(): PIIConfig { return this._config; }
+
   /** Scan text for PII. Returns matches and optionally redacted text. */
   scan(text: string): ScanResult {
-    if (!this.config.enabled) return { text, matches: [], blocked: false, redacted: false };
+    if (!this._config.enabled) return { text, matches: [], blocked: false, redacted: false };
 
     const matches: PIIMatch[] = [];
 
@@ -49,6 +70,8 @@ export class PIIDetector {
       const regex = new RegExp(pattern.source, pattern.flags);
       let match: RegExpExecArray | null;
       while ((match = regex.exec(text)) !== null) {
+        // Validate credit card numbers with Luhn algorithm
+        if (type === "credit_card" && !luhnCheck(match[0])) continue;
         matches.push({
           type,
           value: "[REDACTED]", // SECURITY: Never store raw PII values in match objects
@@ -60,8 +83,8 @@ export class PIIDetector {
     }
 
     // Custom patterns — validated at construction time, safe patterns only
-    if (this.config.customPatterns) {
-      for (const custom of this.config.customPatterns) {
+    if (this._config.customPatterns) {
+      for (const custom of this._config.customPatterns) {
         try {
           // Reject patterns with known ReDoS structures: nested quantifiers like (a+)+, (a*)*
           if (/\([^)]*[+*][^)]*\)[+*]/.test(custom.pattern)) continue;
@@ -90,7 +113,7 @@ export class PIIDetector {
 
     if (matches.length === 0) return { text, matches: [], blocked: false, redacted: false };
 
-    const action = this.config.action || "warn";
+    const action = this._config.action || "warn";
 
     if (action === "block") {
       return { text, matches, blocked: true, redacted: false };

@@ -44,15 +44,43 @@ export function parseHTML(html: string): string {
 }
 
 /**
+ * Split a CSV line respecting quoted fields (handles commas inside quotes).
+ */
+function splitCSVLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"'; // escaped quote
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      fields.push(current.trim());
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+/**
  * Parse a CSV string into text (row per line).
+ * Handles quoted fields containing commas.
  */
 export function parseCSV(csv: string): string {
   const lines = csv.split("\n").filter(l => l.trim());
   if (lines.length === 0) return "";
 
-  const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+  const headers = splitCSVLine(lines[0]);
   const rows = lines.slice(1).map(line => {
-    const values = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+    const values = splitCSVLine(line);
     return headers.map((h, i) => `${h}: ${values[i] || ""}`).join(", ");
   });
 

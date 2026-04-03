@@ -71,6 +71,8 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
     if (!gateway.rag) return res.status(400).json({ error: "RAG not enabled" });
     const { content, name, type, tenantId } = req.body as { content: string; name: string; type: string; tenantId?: string };
     if (!content || !name) return res.status(400).json({ error: "content and name required" });
+    // Max content length: 10MB
+    if (typeof content === "string" && content.length > 10 * 1024 * 1024) return res.status(400).json({ error: "Content too large (max 10MB)" });
     try {
       const result = await gateway.rag.ingest(content, { name, type: (type || "text") as "text", tenantId });
       res.json({ success: true, ...result });
@@ -97,8 +99,12 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
   router.get("/policies", (_req: Req, res: Res) => res.json({ policies: gateway.policies.getPolicies() }));
 
   router.post("/policies", (req: Req, res: Res) => {
+    const policy = req.body as Record<string, unknown>;
+    if (!policy.id || !policy.name || !policy.type || !policy.action) {
+      return res.status(400).json({ error: "Policy requires: id, name, type, action" });
+    }
     try {
-      gateway.policies.addPolicy(req.body as unknown as ContentPolicy);
+      gateway.policies.addPolicy(policy as unknown as ContentPolicy);
       res.json({ success: true });
     } catch (err) { res.status(400).json({ error: err instanceof Error ? err.message : "Failed" }); }
   });
@@ -144,6 +150,12 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
       scopeType: string; scopeId: string; monthlyTokenLimit: number; monthlyCostLimit?: number; tenantId?: string;
     };
     if (!scopeType || !scopeId) return res.status(400).json({ error: "scopeType and scopeId required" });
+    if (monthlyTokenLimit !== undefined && (typeof monthlyTokenLimit !== "number" || monthlyTokenLimit < 0)) {
+      return res.status(400).json({ error: "monthlyTokenLimit must be a non-negative number" });
+    }
+    if (monthlyCostLimit !== undefined && (typeof monthlyCostLimit !== "number" || monthlyCostLimit < 0)) {
+      return res.status(400).json({ error: "monthlyCostLimit must be a non-negative number" });
+    }
     const id = `budget_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     gateway.database.run(
       "INSERT INTO bulwark_budgets (id, tenant_id, scope_type, scope_id, monthly_token_limit, monthly_cost_limit) VALUES (?, ?, ?, ?, ?, ?)",

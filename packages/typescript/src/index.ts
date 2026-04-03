@@ -35,7 +35,6 @@ export type { CacheStore, RateLimitConfig, RateLimitResult, ResponseCacheConfig 
 
 // Streaming
 export type { StreamEvent } from "./streaming";
-export { createStreamAdapter } from "./streaming";
 
 // Multi-tenant
 export { TenantManager } from "./tenant";
