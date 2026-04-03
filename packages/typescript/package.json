@@ -1,6 +1,6 @@
 {
   "name": "@bulwark-ai/gateway",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Enterprise AI governance gateway — PII detection, budget control, audit logging, RAG, multi-tenant, admin UI. Drop into any Node.js app.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,8 +17,8 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit"

@@ -13,3 +13,4 @@ coverage/
 .eslintrc*
 .prettierrc*
 vitest.config.*
+*.tgz
