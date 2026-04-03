@@ -1,0 +1,15 @@
+# Source (dist/ is the published artifact)
+src/
+tsconfig.json
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Dev files
+.gitignore
+.eslintrc*
+.prettierrc*
+vitest.config.*
