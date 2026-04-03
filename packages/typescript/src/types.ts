@@ -96,8 +96,8 @@ export interface ChatRequest {
   /** Tenant ID for multi-tenant isolation */
   tenantId?: string;
 
-  /** RAG knowledge base to search */
-  knowledgeBase?: string;
+  /** RAG knowledge base — set to true to enable, or pass a source ID to search specific source */
+  knowledgeBase?: boolean | string;
 
   /** Override PII settings for this request */
   pii?: boolean;
@@ -138,7 +138,7 @@ export interface ChatResponse {
   };
 
   /** PII detections (if any were found and redacted) */
-  piiDetections?: { type: string; redacted: boolean }[];
+  piiDetections?: { type: string; redacted: boolean; direction?: "input" | "output" }[];
 
   /** Policy violations (if any) */
   policyViolations?: { policy: string; action: "blocked" | "warned" }[];

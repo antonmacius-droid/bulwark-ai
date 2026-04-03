@@ -118,6 +118,16 @@ export class PostgresDatabase implements Database {
   private _initPromise: Promise<void> | null = null;
 
   constructor(connectionString: string, poolConfig?: { max?: number; idleTimeoutMillis?: number; connectionTimeoutMillis?: number }) {
+    // SAFETY: Postgres adapter has a fundamental architecture issue — the sync Database
+    // interface is incompatible with pg's async nature. All reads silently return empty/undefined.
+    // Block usage until async database layer ships in v0.2.
+    if (!process.env.BULWARK_POSTGRES_EXPERIMENTAL) {
+      throw new Error(
+        "[Bulwark] Postgres adapter is NOT production-ready. The sync Database interface " +
+        "is incompatible with pg's async driver — reads return empty data, writes are fire-and-forget. " +
+        "Use SQLite for now. Set BULWARK_POSTGRES_EXPERIMENTAL=1 to bypass this check at your own risk."
+      );
+    }
     this.connectionString = connectionString;
     this.poolConfig = {
       max: poolConfig?.max || 20,

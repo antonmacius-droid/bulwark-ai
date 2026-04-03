@@ -8,8 +8,8 @@ import { checkLicense } from "../rag/license-check";
 
 import type { Database } from "../database";
 
-/** Package version — update alongside package.json */
-const BULWARK_VERSION = "0.1.0";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const BULWARK_VERSION: string = (() => { try { return require("../../package.json").version; } catch { return "0.1.x"; } })();
 
 export interface SOC2Config {
   /** Enable immutable audit mode — prevents DELETE on audit table */
