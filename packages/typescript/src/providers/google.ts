@@ -1,5 +1,6 @@
 import type { ProviderConfig } from "../types";
 import type { LLMProvider, LLMRequest, LLMResponse } from "./base";
+import { validateBaseUrl } from "./base";
 
 /**
  * Google Vertex AI / Gemini provider.
@@ -17,6 +18,7 @@ export class GoogleProvider implements LLMProvider {
   private baseUrl: string;
 
   constructor(config: ProviderConfig) {
+    if (config.baseUrl) validateBaseUrl(config.baseUrl);
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
   }
@@ -33,9 +35,10 @@ export class GoogleProvider implements LLMProvider {
         parts: [{ text: m.content }],
       }));
 
-    const response = await fetch(`${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`, {
+    // SECURITY: API key in header, not URL (avoids key appearing in logs/proxies)
+    const response = await fetch(`${this.baseUrl}/models/${model}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
       body: JSON.stringify({
         contents,
         systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction.content }] } : undefined,

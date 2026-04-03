@@ -1,5 +1,6 @@
 import type { ProviderConfig } from "../types";
 import type { LLMProvider, LLMRequest, LLMResponse } from "./base";
+import { validateBaseUrl } from "./base";
 
 /**
  * Mistral AI provider — EU-based LLM (France).
@@ -10,6 +11,7 @@ export class MistralProvider implements LLMProvider {
   private baseUrl: string;
 
   constructor(config: ProviderConfig) {
+    if (config.baseUrl) validateBaseUrl(config.baseUrl);
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl || "https://api.mistral.ai/v1";
   }

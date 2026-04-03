@@ -1,5 +1,6 @@
 import type { ProviderConfig } from "../types";
 import type { LLMProvider, LLMRequest, LLMResponse } from "./base";
+import { validateBaseUrl } from "./base";
 
 /**
  * Ollama provider — run LLMs locally (Llama, Mistral, Phi, etc).
@@ -17,6 +18,7 @@ export class OllamaProvider implements LLMProvider {
   private baseUrl: string;
 
   constructor(config: ProviderConfig) {
+    if (config.baseUrl) validateBaseUrl(config.baseUrl);
     this.baseUrl = config.baseUrl || "http://localhost:11434";
   }
 

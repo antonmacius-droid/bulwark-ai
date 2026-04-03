@@ -5,10 +5,13 @@ export class MemoryCacheStore implements CacheStore {
   private store = new Map<string, { value: unknown; expiresAt?: number }>();
   private counters = new Map<string, { value: number; expiresAt?: number }>();
   private cleanupTimer: ReturnType<typeof setInterval>;
+  private maxEntries: number;
 
-  constructor() {
+  constructor(options?: { maxEntries?: number }) {
+    this.maxEntries = options?.maxEntries || 10_000;
     // Background cleanup every 60s to prevent memory leaks
     this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
+    this.cleanupTimer.unref(); // Don't keep process alive
   }
 
   /** Stop background cleanup — call on shutdown */
@@ -39,6 +42,11 @@ export class MemoryCacheStore implements CacheStore {
   }
 
   async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
+    // LRU eviction: if at capacity, delete oldest entry
+    if (this.store.size >= this.maxEntries) {
+      const oldestKey = this.store.keys().next().value;
+      if (oldestKey) this.store.delete(oldestKey);
+    }
     this.store.set(key, {
       value,
       expiresAt: ttlSeconds ? Date.now() + ttlSeconds * 1000 : undefined,

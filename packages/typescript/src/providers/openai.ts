@@ -1,11 +1,13 @@
 import OpenAI from "openai";
 import type { ProviderConfig } from "../types";
 import type { LLMProvider, LLMRequest, LLMResponse, LLMStreamChunk } from "./base";
+import { validateBaseUrl } from "./base";
 
 export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
 
   constructor(config: ProviderConfig) {
+    if (config.baseUrl) validateBaseUrl(config.baseUrl);
     this.client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl });
   }
 

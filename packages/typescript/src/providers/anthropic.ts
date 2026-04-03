@@ -1,11 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ProviderConfig } from "../types";
 import type { LLMProvider, LLMRequest, LLMResponse, LLMStreamChunk } from "./base";
+import { validateBaseUrl } from "./base";
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
 
   constructor(config: ProviderConfig) {
+    if (config.baseUrl) validateBaseUrl(config.baseUrl);
     this.client = new Anthropic({ apiKey: config.apiKey, baseURL: config.baseUrl });
   }
 

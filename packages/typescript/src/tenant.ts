@@ -56,15 +56,22 @@ export class TenantManager {
     if (updates.settings) this.db.run("UPDATE bulwark_tenants SET settings = ? WHERE id = ?", [JSON.stringify(updates.settings), id]);
   }
 
-  /** Delete a tenant and ALL its data */
+  /** Delete a tenant and ALL its data (transactional) */
   delete(id: string): void {
-    this.db.run("DELETE FROM bulwark_chunks WHERE tenant_id = ?", [id]);
-    this.db.run("DELETE FROM bulwark_knowledge_sources WHERE tenant_id = ?", [id]);
-    this.db.run("DELETE FROM bulwark_usage WHERE tenant_id = ?", [id]);
-    this.db.run("DELETE FROM bulwark_audit WHERE tenant_id = ?", [id]);
-    this.db.run("DELETE FROM bulwark_policies WHERE tenant_id = ?", [id]);
-    this.db.run("DELETE FROM bulwark_budgets WHERE tenant_id = ?", [id]);
-    this.db.run("DELETE FROM bulwark_tenants WHERE id = ?", [id]);
+    this.db.run("BEGIN TRANSACTION", []);
+    try {
+      this.db.run("DELETE FROM bulwark_chunks WHERE tenant_id = ?", [id]);
+      this.db.run("DELETE FROM bulwark_knowledge_sources WHERE tenant_id = ?", [id]);
+      this.db.run("DELETE FROM bulwark_usage WHERE tenant_id = ?", [id]);
+      this.db.run("DELETE FROM bulwark_audit WHERE tenant_id = ?", [id]);
+      this.db.run("DELETE FROM bulwark_policies WHERE tenant_id = ?", [id]);
+      this.db.run("DELETE FROM bulwark_budgets WHERE tenant_id = ?", [id]);
+      this.db.run("DELETE FROM bulwark_tenants WHERE id = ?", [id]);
+      this.db.run("COMMIT", []);
+    } catch (err) {
+      this.db.run("ROLLBACK", []);
+      throw err;
+    }
   }
 
   /** Get usage stats for a tenant */
