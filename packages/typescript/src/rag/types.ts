@@ -30,7 +30,7 @@ export interface SearchResult {
 export interface KnowledgeSource {
   id: string;
   name: string;
-  type: "pdf" | "docx" | "text" | "url" | "confluence" | "sharepoint";
+  type: "pdf" | "docx" | "text" | "markdown" | "csv" | "html" | "url" | "confluence" | "sharepoint";
   status: "pending" | "indexing" | "active" | "error";
   chunkCount: number;
   tenantId?: string;

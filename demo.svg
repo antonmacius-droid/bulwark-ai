@@ -1,0 +1,180 @@
+<svg width="800" height="420" viewBox="0 0 800 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideRight { from { transform: translateX(-20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+    @keyframes typeCursor { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes scanLine { 0% { x: 30; } 100% { x: 740; } }
+    @keyframes checkPop { 0% { transform: scale(0); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+    @keyframes flowDot { 0% { offset-distance: 0%; opacity: 0; } 5% { opacity: 1; } 95% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+
+    .step { opacity: 0; }
+    .step-1 { animation: slideRight 0.5s ease-out 0.5s forwards; }
+    .step-2 { animation: slideRight 0.5s ease-out 1.5s forwards; }
+    .step-3 { animation: slideRight 0.5s ease-out 2.5s forwards; }
+    .step-4 { animation: slideRight 0.5s ease-out 3.5s forwards; }
+    .step-5 { animation: slideRight 0.5s ease-out 4.5s forwards; }
+    .step-6 { animation: slideRight 0.5s ease-out 5.5s forwards; }
+    .step-7 { animation: slideRight 0.5s ease-out 6.5s forwards; }
+
+    .scan { animation: pulse 1.5s ease-in-out infinite; }
+    .cursor { animation: typeCursor 0.8s step-end infinite; }
+
+    .code-text { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
+    .ui-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+  </style>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="800" y2="420">
+      <stop offset="0%" stop-color="#0B1120"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#635BFF"/>
+      <stop offset="1" stop-color="#80E9FF"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#059669"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#DC2626"/>
+      <stop offset="1" stop-color="#F87171"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="420" fill="url(#bg)"/>
+  <rect width="800" height="420" fill="url(#bg)" rx="0"/>
+
+  <!-- Subtle grid -->
+  <g opacity="0.03">
+    <line x1="0" y1="0" x2="0" y2="420" stroke="white" stroke-width="1" transform="translate(40,0)"/>
+    <line x1="0" y1="0" x2="0" y2="420" stroke="white" stroke-width="1" transform="translate(80,0)"/>
+    <line x1="0" y1="0" x2="0" y2="420" stroke="white" stroke-width="1" transform="translate(120,0)"/>
+    <line x1="0" y1="0" x2="800" y2="0" stroke="white" stroke-width="1" transform="translate(0,40)"/>
+    <line x1="0" y1="0" x2="800" y2="0" stroke="white" stroke-width="1" transform="translate(0,80)"/>
+  </g>
+
+  <!-- Header -->
+  <text x="30" y="35" class="ui-text" font-size="13" fill="rgba(255,255,255,0.3)" font-weight="600" letter-spacing="2">BULWARK AI — REQUEST PIPELINE</text>
+  <line x1="30" y1="48" x2="770" y2="48" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+  <!-- Step 1: Incoming Request -->
+  <g class="step step-1">
+    <rect x="30" y="60" width="740" height="44" rx="6" fill="rgba(99,91,255,0.06)" stroke="rgba(99,91,255,0.15)" stroke-width="1"/>
+    <text x="46" y="77" class="code-text" font-size="10" fill="rgba(99,91,255,0.6)">INCOMING</text>
+    <text x="46" y="94" class="code-text" font-size="12" fill="rgba(255,255,255,0.8)">gateway.chat({ model: "gpt-4o", messages: [{ role: "user", content: "My email is john@acme.com, SSN 123-45-6789" }] })</text>
+    <rect x="730" y="72" width="30" height="20" rx="4" fill="rgba(99,91,255,0.2)"/>
+    <text x="745" y="86" text-anchor="middle" class="code-text" font-size="9" fill="#80E9FF">→</text>
+  </g>
+
+  <!-- Step 2: PII Detection -->
+  <g class="step step-2">
+    <rect x="30" y="114" width="360" height="52" rx="6" fill="rgba(220,38,38,0.05)" stroke="rgba(220,38,38,0.15)" stroke-width="1"/>
+    <text x="46" y="131" class="code-text" font-size="10" fill="rgba(220,38,38,0.7)">PII DETECTION</text>
+    <g transform="translate(46, 138)">
+      <rect x="0" y="0" width="80" height="18" rx="3" fill="rgba(220,38,38,0.15)"/>
+      <text x="40" y="13" text-anchor="middle" class="code-text" font-size="9" fill="#F87171">EMAIL → [REDACTED]</text>
+      <rect x="88" y="0" width="72" height="18" rx="3" fill="rgba(220,38,38,0.15)"/>
+      <text x="124" y="13" text-anchor="middle" class="code-text" font-size="9" fill="#F87171">SSN → [REDACTED]</text>
+      <rect x="168" y="0" width="60" height="18" rx="3" fill="rgba(5,150,105,0.15)"/>
+      <text x="198" y="13" text-anchor="middle" class="code-text" font-size="9" fill="#34D399">2 found</text>
+    </g>
+    <circle cx="375" cy="140" r="8" fill="rgba(5,150,105,0.2)" class="scan"/>
+    <text x="375" y="144" text-anchor="middle" class="code-text" font-size="10" fill="#34D399">✓</text>
+  </g>
+
+  <!-- Step 3: Prompt Injection Guard -->
+  <g class="step step-3">
+    <rect x="410" y="114" width="360" height="52" rx="6" fill="rgba(217,119,6,0.05)" stroke="rgba(217,119,6,0.15)" stroke-width="1"/>
+    <text x="426" y="131" class="code-text" font-size="10" fill="rgba(217,119,6,0.7)">INJECTION GUARD</text>
+    <text x="426" y="152" class="code-text" font-size="11" fill="rgba(255,255,255,0.5)">20+ patterns scanned • all messages checked</text>
+    <circle cx="755" cy="140" r="8" fill="rgba(5,150,105,0.2)" class="scan"/>
+    <text x="755" y="144" text-anchor="middle" class="code-text" font-size="10" fill="#34D399">✓</text>
+  </g>
+
+  <!-- Step 4: Policy Engine -->
+  <g class="step step-4">
+    <rect x="30" y="176" width="240" height="52" rx="6" fill="rgba(167,139,250,0.05)" stroke="rgba(167,139,250,0.15)" stroke-width="1"/>
+    <text x="46" y="193" class="code-text" font-size="10" fill="rgba(167,139,250,0.7)">POLICY ENGINE</text>
+    <text x="46" y="214" class="code-text" font-size="11" fill="rgba(255,255,255,0.5)">keyword • regex • topic • max_tokens</text>
+    <circle cx="255" cy="202" r="8" fill="rgba(5,150,105,0.2)"/>
+    <text x="255" y="206" text-anchor="middle" class="code-text" font-size="10" fill="#34D399">✓</text>
+  </g>
+
+  <!-- Step 5: Budget + Rate Limit -->
+  <g class="step step-5">
+    <rect x="290" y="176" width="240" height="52" rx="6" fill="rgba(96,165,250,0.05)" stroke="rgba(96,165,250,0.15)" stroke-width="1"/>
+    <text x="306" y="193" class="code-text" font-size="10" fill="rgba(96,165,250,0.7)">BUDGET + RATE LIMIT</text>
+    <text x="306" y="214" class="code-text" font-size="11" fill="rgba(255,255,255,0.5)">12,430 / 50,000 tokens used</text>
+    <circle cx="515" cy="202" r="8" fill="rgba(5,150,105,0.2)"/>
+    <text x="515" y="206" text-anchor="middle" class="code-text" font-size="10" fill="#34D399">✓</text>
+  </g>
+
+  <!-- Step 6: RAG + LLM Call -->
+  <g class="step step-6">
+    <rect x="550" y="176" width="220" height="52" rx="6" fill="rgba(5,150,105,0.05)" stroke="rgba(5,150,105,0.15)" stroke-width="1"/>
+    <text x="566" y="193" class="code-text" font-size="10" fill="rgba(5,150,105,0.7)">RAG + LLM CALL</text>
+    <text x="566" y="208" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">KB: 3 sources matched</text>
+    <text x="566" y="220" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">→ gpt-4o (623ms)</text>
+    <circle cx="755" cy="202" r="8" fill="rgba(5,150,105,0.2)" class="scan"/>
+    <text x="755" y="206" text-anchor="middle" class="code-text" font-size="10" fill="#34D399">✓</text>
+  </g>
+
+  <!-- Step 7: Response -->
+  <g class="step step-7">
+    <rect x="30" y="242" width="740" height="88" rx="6" fill="rgba(5,150,105,0.04)" stroke="rgba(5,150,105,0.15)" stroke-width="1"/>
+    <text x="46" y="259" class="code-text" font-size="10" fill="rgba(5,150,105,0.7)">RESPONSE</text>
+
+    <text x="46" y="278" class="code-text" font-size="11" fill="rgba(255,255,255,0.7)">{</text>
+    <text x="58" y="292" class="code-text" font-size="11" fill="rgba(167,139,250,0.8)">content</text>
+    <text x="106" y="292" class="code-text" font-size="11" fill="rgba(255,255,255,0.3)">:</text>
+    <text x="114" y="292" class="code-text" font-size="11" fill="rgba(52,211,153,0.8)">"Based on your company knowledge base [1][2]..."</text>
+    <text x="58" y="306" class="code-text" font-size="11" fill="rgba(167,139,250,0.8)">cost</text>
+    <text x="88" y="306" class="code-text" font-size="11" fill="rgba(255,255,255,0.3)">:</text>
+    <text x="96" y="306" class="code-text" font-size="11" fill="rgba(251,191,36,0.8)">$0.0023</text>
+    <text x="155" y="306" class="code-text" font-size="11" fill="rgba(167,139,250,0.8)">piiRedacted</text>
+    <text x="230" y="306" class="code-text" font-size="11" fill="rgba(255,255,255,0.3)">:</text>
+    <text x="238" y="306" class="code-text" font-size="11" fill="rgba(248,113,113,0.8)">2</text>
+    <text x="252" y="306" class="code-text" font-size="11" fill="rgba(167,139,250,0.8)">sources</text>
+    <text x="302" y="306" class="code-text" font-size="11" fill="rgba(255,255,255,0.3)">:</text>
+    <text x="310" y="306" class="code-text" font-size="11" fill="rgba(96,165,250,0.8)">[3 documents]</text>
+    <text x="400" y="306" class="code-text" font-size="11" fill="rgba(167,139,250,0.8)">auditId</text>
+    <text x="448" y="306" class="code-text" font-size="11" fill="rgba(255,255,255,0.3)">:</text>
+    <text x="456" y="306" class="code-text" font-size="11" fill="rgba(255,255,255,0.4)">"aud_7f3a..."</text>
+    <text x="46" y="320" class="code-text" font-size="11" fill="rgba(255,255,255,0.7)">}</text>
+  </g>
+
+  <!-- Bottom status bar -->
+  <g class="step step-7">
+    <rect x="30" y="345" width="740" height="36" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+    <circle cx="50" cy="363" r="4" fill="#34D399" filter="url(#glow)"/>
+    <text x="62" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">Pipeline OK</text>
+    <text x="160" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>
+    <text x="175" y="367" class="code-text" font-size="10" fill="rgba(96,165,250,0.6)">GDPR</text>
+    <text x="205" y="367" class="code-text" font-size="10" fill="rgba(96,165,250,0.6)">SOC 2</text>
+    <text x="242" y="367" class="code-text" font-size="10" fill="rgba(96,165,250,0.6)">HIPAA</text>
+    <text x="280" y="367" class="code-text" font-size="10" fill="rgba(96,165,250,0.6)">CCPA</text>
+    <text x="320" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>
+    <text x="335" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">128 tests passing</text>
+    <text x="465" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>
+    <text x="480" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">6 providers</text>
+    <text x="560" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>
+    <text x="575" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">Multi-tenant</text>
+    <text x="660" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>
+    <text x="675" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">Self-hosted</text>
+  </g>
+
+  <!-- npm install bottom -->
+  <g class="step step-7">
+    <rect x="30" y="392" width="300" height="22" rx="4" fill="rgba(255,255,255,0.03)"/>
+    <text x="42" y="407" class="code-text" font-size="11" fill="rgba(255,255,255,0.25)">$</text>
+    <text x="55" y="407" class="code-text" font-size="11" fill="rgba(128,233,255,0.6)">npm install @bulwark-ai/gateway</text>
+    <rect x="282" y="398" width="7" height="12" fill="rgba(128,233,255,0.5)" class="cursor"/>
+  </g>
+</svg>

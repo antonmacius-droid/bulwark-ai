@@ -20,7 +20,11 @@
 npm install @bulwark-ai/gateway
 ```
 
-**125 tests passing** (42 unit + 83 integration with real LLM calls) | **Zero type errors** | MIT + BSL 1.1
+**128 tests passing** (42 unit + 86 integration with real LLM calls) | **Zero type errors** | MIT + BSL 1.1
+
+<p align="center">
+  <img src="demo.svg" alt="Bulwark AI Pipeline" width="100%">
+</p>
 
 ## Quick Start
 

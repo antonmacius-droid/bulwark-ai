@@ -27,13 +27,36 @@ jobs:
         working-directory: packages/typescript
         run: npx tsc --noEmit
 
-      - name: Run tests
+      - name: Run unit tests
         working-directory: packages/typescript
-        run: npx vitest run
+        run: npx vitest run --exclude src/__tests__/integration.test.ts
 
       - name: Build
         working-directory: packages/typescript
         run: npm run build
+
+  integration:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: packages/typescript
+        run: npm ci
+
+      - name: Run integration tests
+        if: env.OPENAI_API_KEY != ''
+        working-directory: packages/typescript
+        run: npx vitest run src/__tests__/integration.test.ts
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BULWARK_LICENSE_KEY: ci
 
   publish:
     needs: test
