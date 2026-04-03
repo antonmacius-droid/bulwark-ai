@@ -20,7 +20,7 @@
 npm install @bulwark-ai/gateway
 ```
 
-**131 tests passing** (42 unit + 89 integration with real LLM calls) | **Zero type errors** | MIT + BSL 1.1
+**136 tests passing** (42 unit + 94 integration with real LLM calls) | **Zero type errors** | MIT + BSL 1.1
 
 <p align="center">
   <img src="demo.svg" alt="Bulwark AI Pipeline" width="100%">
@@ -127,6 +127,7 @@ pii: {
 **Input**: PII redacted before sending to LLM. `"Contact john@test.com"` → `"Contact [EMAIL]"`
 **Output**: LLM response scanned and PII redacted before returning to user.
 **ReDoS protected**: Malicious regex patterns (nested quantifiers) automatically rejected.
+**Security**: PII values are never stored in match objects or error responses — only type and position are recorded.
 
 ### Prompt Injection Guard
 
@@ -176,6 +177,8 @@ for await (const event of stream) {
   if (event.type === "done") console.log("Cost:", event.cost);
 }
 ```
+
+Streaming runs the identical governance pipeline as non-streaming — all messages scanned for PII and injection, system prompts hardened.
 
 ### Budget Enforcement + Rate Limiting
 
@@ -340,13 +343,13 @@ Your App
 | Store | Use Case | Config |
 |-------|----------|--------|
 | **SQLite** | Development, single instance | `database: "bulwark.db"` |
-| **PostgreSQL** | Production, pgvector for RAG | `database: "postgres://..."` |
+| **PostgreSQL** | Production, pgvector for RAG (experimental — use SQLite for production) | `database: "postgres://..."` |
 | **Redis** | Rate limiting, response caching | `cache: new RedisCacheStore(redis)` |
 | **In-Memory** | Testing | Default |
 
 ## Test Suite
 
-**131 tests, 100% pass rate.**
+**136 tests, 100% pass rate.**
 
 | Suite | Tests | What |
 |-------|-------|------|
@@ -377,6 +380,7 @@ Your App
 | Integration: RAG E2E | 3 | Ingest → search → chat with KB, tenant isolation, delete |
 | Integration: Retry + Fallback | 3 | Provider fallback, retry success, exhaustion |
 | Integration: Runtime Policies | 2 | Add/remove at runtime |
+| Integration: Security Regression | 5 | Streaming PII/injection scan, prompt hardening, PII value protection |
 
 Run integration tests: `OPENAI_API_KEY=sk-xxx npx vitest run src/__tests__/integration.test.ts`
 
@@ -389,6 +393,7 @@ Run integration tests: `OPENAI_API_KEY=sk-xxx npx vitest run src/__tests__/integ
 | Embeddable | Yes (`npm install`) | No (proxy) | No | No |
 | PII Detection | 15 types + custom | Plugin | Partial | No |
 | Output PII Scan | Yes | No | No | No |
+| Output PII Protection | Yes (non-streaming) | No | No | No |
 | Prompt Injection Guard | 20+ patterns | No | No | No |
 | Budget Control | Per-user/team | Yes | Yes | No |
 | Audit Log | Yes | Yes | Yes | Yes |
@@ -402,7 +407,7 @@ Run integration tests: `OPENAI_API_KEY=sk-xxx npx vitest run src/__tests__/integ
 | Redis Support | Yes | No | N/A | N/A |
 | Providers | 6 | 100+ | Many | Many |
 | Retry + Fallback | Yes | Yes | Yes | No |
-| Test Suite | 131 tests | ? | ? | ? |
+| Test Suite | 136 tests | ? | ? | ? |
 
 ## License
 

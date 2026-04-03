@@ -161,7 +161,7 @@
     <text x="242" y="367" class="code-text" font-size="10" fill="rgba(96,165,250,0.6)">HIPAA</text>
     <text x="280" y="367" class="code-text" font-size="10" fill="rgba(96,165,250,0.6)">CCPA</text>
     <text x="320" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>
-    <text x="335" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">131 tests passing</text>
+    <text x="335" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">136 tests passing</text>
     <text x="465" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>
     <text x="480" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.4)">6 providers</text>
     <text x="560" y="367" class="code-text" font-size="10" fill="rgba(255,255,255,0.25)">│</text>

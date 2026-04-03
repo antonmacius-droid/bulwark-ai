@@ -53,6 +53,8 @@ const response = await gateway.chat({
       <h3 style={h3}>Pipeline</h3>
       <p style={p}>Every <code>gateway.chat()</code> call goes through this pipeline:</p>
       <div style={p}>1. Input Validation → 2. Prompt Injection Detection → 3. PII Scan → 4. Content Policy Check → 5. Rate Limit → 6. Budget Check → 7. RAG Augment → 8. LLM Call (retry + fallback) → 9. Output PII Scan → 10. Cost Calculate → 11. Audit Log</div>
+      <p style={p}><strong>Output PII Scan:</strong> LLM responses are scanned for PII before being returned to the user, using the same detection engine as input scanning.</p>
+      <p style={p}><strong>Streaming:</strong> Streaming requests run the identical governance pipeline before any chunks are sent — there is no security difference between streaming and non-streaming.</p>
       <h3 style={h3}>Express Integration</h3>
       <div style={codeBlock}>{`import { bulwarkRouter, createAdminRouter } from "@bulwark-ai/gateway";
 
@@ -95,6 +97,8 @@ const azure = new AzureOpenAIProvider({
   apiKey: process.env.AZURE_KEY,
   baseUrl: "https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOY",
 });`}</div>
+      <h3 style={h3}>Retry & Fallback</h3>
+      <p style={p}>If a provider fails, Bulwark automatically retries with exponential backoff, then falls back to configured alternatives. See the <strong>Retry & Fallback</strong> section for full configuration details.</p>
       <h3 style={h3}>Cost Tracking</h3>
       <p style={p}>Every model has built-in pricing. Costs are calculated automatically per request:</p>
       <div style={codeBlock}>{`// 30+ models with pricing (per million tokens):
@@ -172,6 +176,8 @@ const azure = new AzureOpenAIProvider({
       <p style={p}><strong>Warn:</strong> PII is logged but request proceeds unchanged.</p>
       <h3 style={h3}>ReDoS Protection</h3>
       <p style={p}>Custom regex patterns are validated against catastrophic backtracking (ReDoS). Patterns with nested quantifiers like <code>(a+)+</code> are automatically rejected.</p>
+      <h3 style={h3}>Privacy by Design</h3>
+      <p style={p}>PII values are never stored in match objects or error responses. Only the PII type and position are recorded.</p>
     </div>
   ),
   policies: () => (
@@ -201,6 +207,7 @@ const azure = new AzureOpenAIProvider({
       <p style={p}><strong>max_tokens:</strong> Limit input size.</p>
       <h3 style={h3}>Prompt Injection Guard</h3>
       <p style={p}>Built-in detection for 20+ injection patterns: instruction override, DAN mode, system prompt extraction, role-play, jailbreak, developer mode, delimiter injection, encoded payloads, forget/reset/disregard instructions. Configurable sensitivity (low/medium/high).</p>
+      <p style={p}><strong>Note:</strong> <code>regex_block</code> policies include ReDoS protection — patterns with catastrophic backtracking (e.g. nested quantifiers) are automatically rejected at creation time.</p>
     </div>
   ),
   budgets: () => (
@@ -421,6 +428,8 @@ const cache = new ResponseCache(new RedisCacheStore(redis), {
 
 // Only caches deterministic requests (temperature = 0)
 // Uses SHA-256 hash of (model + messages) as cache key`}</div>
+      <h3 style={h3}>Security Note</h3>
+      <p style={p}>Streaming runs the FULL governance pipeline before streaming starts — identical to non-streaming. All user messages are scanned for PII and prompt injection before any chunks are sent to the client.</p>
     </div>
   ),
   docker: () => (
@@ -505,7 +514,7 @@ curl http://localhost:3100/health`}</div>
   ),
   tests: () => (
     <div>
-      <h3 style={h3}>Test Suite — 131 Tests, 100% Pass Rate</h3>
+      <h3 style={h3}>Test Suite — 136 Tests, 100% Pass Rate</h3>
       <p style={p}>Bulwark AI ships with comprehensive unit and integration tests. Integration tests make real API calls to OpenAI to verify the full governance pipeline.</p>
       <h3 style={h3}>Running Tests</h3>
       <div style={codeBlock}>{`# Unit tests (no API key needed, instant)
@@ -525,7 +534,7 @@ OPENAI_API_KEY=sk-xxx npx vitest run`}</div>
         <div style={{ marginTop: 6 }}><strong>Document Chunker (6)</strong> — Paragraph/sentence/markdown splitting. Chunk size, overlap, empty text, sequential indices.</div>
         <div style={{ marginTop: 6 }}><strong>Cache & Rate Limiter (9)</strong> — Memory store set/get/TTL. Counter increment/expire. Rate limiter allow/block/scope.</div>
       </div>
-      <h3 style={h3}>Integration Tests (89 tests, real LLM calls)</h3>
+      <h3 style={h3}>Integration Tests (94 tests, real LLM calls)</h3>
       <div style={p}>
         <div><strong>1. Basic Gateway (5)</strong> — Request metadata, system messages, multi-turn, maxTokens, deterministic output.</div>
         <div style={{ marginTop: 6 }}><strong>2. PII Input Redaction (8)</strong> — Email, phone, credit card, SSN, IBAN, IP redacted before LLM sees them. Multiple PII. Disable option.</div>
@@ -549,6 +558,7 @@ OPENAI_API_KEY=sk-xxx npx vitest run`}</div>
         <div style={{ marginTop: 6 }}><strong>20. Runtime Policy Management (2)</strong> — Add policy at runtime and enforce it. Remove policy and verify enforcement stops.</div>
         <div style={{ marginTop: 6 }}><strong>21. RAG Knowledge Base E2E (3)</strong> — Ingest document, search with semantic similarity, chat with KB context and source citations. Tenant isolation verified. Source deletion cascades to chunks.</div>
         <div style={{ marginTop: 6 }}><strong>22. Retry + Fallback (3)</strong> — Falls back to alternate model when primary provider not configured. Retry succeeds on working model. All models exhausted throws error.</div>
+        <div style={{ marginTop: 6 }}><strong>23. Security Regression Tests (5)</strong> — PII values not leaked in error responses. Output PII scan blocks sensitive data. Streaming governance parity with non-streaming. ReDoS patterns rejected. Injection detection across all 20+ patterns.</div>
       </div>
     </div>
   ),
