@@ -632,6 +632,44 @@ Bulwark AI is part of a suite of AI governance tools by AFKzona Group:
 
 **How they connect:** Comply AI pulls audit data, PII reports, and cost data from Bulwark AI to auto-populate compliance evidence and discover AI systems in use. Configure the connection in Comply AI's Settings → Bulwark Integration.
 
+## Licensing
+
+**Core modules** (gateway, providers, security, billing, audit, cache, middleware) are **MIT** — use anywhere, no license key needed.
+
+**Premium modules** (RAG, compliance, admin panel) are **BSL 1.1** — free for development, testing, and non-commercial use. Commercial production use requires a license key.
+
+### Getting a License Key
+
+1. Purchase a license at [afkzonagroup.lt/license](https://afkzonagroup.lt/license)
+2. You will receive a key in the format: `BULWARK-TEAM-acme-20270401-a1b2c3d4e5f6a1b2`
+3. Add it to your `.env` file:
+
+```bash
+# Bulwark AI license key
+BULWARK_LICENSE_KEY=BULWARK-TEAM-acme-20270401-a1b2c3d4e5f6a1b2
+
+# Required for signature verification
+LICENSE_SIGNING_SECRET=your-shared-secret
+```
+
+4. Restart your application
+
+### How It Works
+
+- **Offline verification** — the key is HMAC-SHA256 signed. Verification recomputes the signature locally. No phone-home, no telemetry, no network calls.
+- **No functionality is blocked** — an invalid or missing key only shows a console notice. The software remains fully functional.
+- **Legacy mode** — setting `BULWARK_LICENSE_KEY` to any truthy value (e.g., `BULWARK_LICENSE_KEY=1`) still suppresses the notice for backward compatibility.
+
+### Plans
+
+| Plan | Use Case |
+|------|----------|
+| **Pro** | Small teams, single deployment |
+| **Team** | Multiple deployments, priority support |
+| **Enterprise** | Unlimited deployments, custom terms, SLA |
+
+For custom licensing or compliance consulting: **info@afkzonagroup.lt**
+
 ## License
 
 **Core** (gateway, providers, security, billing, audit, cache, middleware): **MIT** — use anywhere.
