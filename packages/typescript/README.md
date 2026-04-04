@@ -621,6 +621,17 @@ This software is provided "as is", without warranty of any kind. In no event sha
 
 For commercial licensing or compliance consulting: **info@afkzonagroup.lt**
 
+## Part of the AFKzona AI Platform
+
+Bulwark AI is part of a suite of AI governance tools by AFKzona Group:
+
+| Product | Purpose | Repo |
+|---------|---------|------|
+| **Bulwark AI** | AI governance gateway — PII, injection, budgets, audit | [bulwark-ai](https://github.com/antonmacius-droid/bulwark-ai) |
+| **Comply AI** | EU AI Act compliance — risk classification, Annex IV docs, monitoring | [comply-ai](https://github.com/antonmacius-droid/comply-ai) |
+
+**How they connect:** Comply AI pulls audit data, PII reports, and cost data from Bulwark AI to auto-populate compliance evidence and discover AI systems in use. Configure the connection in Comply AI's Settings → Bulwark Integration.
+
 ## License
 
 **Core** (gateway, providers, security, billing, audit, cache, middleware): **MIT** — use anywhere.
