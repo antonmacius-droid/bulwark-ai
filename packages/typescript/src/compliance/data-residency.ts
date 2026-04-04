@@ -1,6 +1,10 @@
 /**
  * Data Residency & Cross-Border Transfer Controls
  *
+ * DISCLAIMER: Provider region mappings are based on publicly available documentation
+ * and may change without notice. Verify data processing locations directly with each
+ * provider. This module does not replace legal assessment of cross-border data transfers.
+ *
  * Implements:
  * - Provider region tracking (where does data go?)
  * - Region restriction (block requests to providers outside allowed regions)

@@ -2,6 +2,11 @@ import { checkLicense } from "../rag/license-check";
 /**
  * GDPR Compliance Module
  *
+ * DISCLAIMER: This module provides technical utilities to assist with GDPR compliance.
+ * It does NOT constitute legal advice or guarantee regulatory compliance. Organizations
+ * must conduct their own legal assessments, appoint a DPO where required, execute DPAs,
+ * and implement appropriate organizational measures beyond these technical controls.
+ *
  * Implements: Right to erasure (Art. 17), Data portability (Art. 20),
  * Data retention, Consent tracking, Breach notification.
  */

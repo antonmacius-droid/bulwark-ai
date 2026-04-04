@@ -583,6 +583,44 @@ Run integration tests: `OPENAI_API_KEY=sk-xxx npx vitest run src/__tests__/integ
 | Test Suite | 136 real LLM tests | ? | ? | ? |
 | Integration Examples | 4 (Express, Next, Fastify, RAG) | Yes | Yes | Yes |
 
+## Legal & Compliance Disclaimer
+
+Bulwark AI provides tools and features that can assist with security, privacy, and compliance workflows (e.g., GDPR, SOC 2, HIPAA, CCPA).
+
+**Use of this software does not by itself ensure compliance with any laws or regulations.**
+
+Users are responsible for:
+- Configuring the system appropriately for their use case
+- Validating outputs and behavior against their requirements
+- Ensuring compliance with applicable laws and internal policies
+
+Bulwark AI processes data based on user configuration and does not control how it is used or what data is submitted to LLM providers.
+
+## Security Notice
+
+Bulwark AI includes protections such as PII detection, prompt injection filtering, content policies, and SSRF protection. These mechanisms are **best-effort safeguards** and are not guaranteed to detect or prevent all threats.
+
+Users should not rely solely on Bulwark AI for security-critical or safety-critical systems without additional controls and validation.
+
+## Third-Party LLM Providers
+
+Bulwark AI integrates with third-party LLM providers (e.g., OpenAI, Anthropic, Google, Mistral).
+
+**Data sent through the gateway may be transmitted to these providers depending on configuration.**
+
+Users are responsible for:
+- Reviewing provider terms of service and data handling policies
+- Ensuring that sensitive data is handled appropriately
+- Configuring PII redaction and content policies as required
+
+Bulwark AI does not control or assume responsibility for third-party data processing.
+
+## Limitation of Liability
+
+This software is provided "as is", without warranty of any kind. In no event shall the authors or contributors be liable for any damages arising from the use of this software, including but not limited to data loss, security incidents, or regulatory non-compliance.
+
+For commercial licensing or compliance consulting: **info@afkzonagroup.lt**
+
 ## License
 
 **Core** (gateway, providers, security, billing, audit, cache, middleware): **MIT** — use anywhere.

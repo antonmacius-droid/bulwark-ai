@@ -2,6 +2,10 @@ import { checkLicense } from "../rag/license-check";
 /**
  * CCPA/CPRA Compliance Module (California Consumer Privacy Act)
  *
+ * DISCLAIMER: This module provides consumer request handling utilities.
+ * It does NOT replace legal review of your privacy policy or data practices.
+ * Consult legal counsel for CCPA/CPRA compliance requirements.
+ *
  * Implements:
  * - Right to know (data access)
  * - Right to delete

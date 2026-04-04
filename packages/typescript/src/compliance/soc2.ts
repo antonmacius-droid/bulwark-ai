@@ -2,6 +2,10 @@ import { checkLicense } from "../rag/license-check";
 /**
  * SOC 2 Compliance Module
  *
+ * DISCLAIMER: This module provides audit logging, anomaly detection, and change tracking.
+ * It does NOT replace a SOC 2 Type I or Type II audit by an accredited CPA firm.
+ * Use these tools as part of your broader compliance program.
+ *
  * Implements: Immutable audit logs, Change tracking, Health monitoring,
  * Anomaly detection, Vendor tracking, Data classification.
  */

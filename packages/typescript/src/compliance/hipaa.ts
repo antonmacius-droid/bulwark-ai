@@ -2,6 +2,10 @@ import { checkLicense } from "../rag/license-check";
 /**
  * HIPAA Compliance Module
  *
+ * DISCLAIMER: This module provides PHI access logging and BAA tracking utilities.
+ * It does NOT constitute a BAA, replace HIPAA training, or guarantee compliance.
+ * You must execute BAAs directly with LLM providers and verify their compliance independently.
+ *
  * Implements technical safeguards required for handling PHI (Protected Health Information)
  * in AI/LLM applications:
  * - PHI detection (18 HIPAA identifiers)
