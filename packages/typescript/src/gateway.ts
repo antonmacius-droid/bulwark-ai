@@ -19,7 +19,7 @@ import { KnowledgeBase } from "./rag/knowledge-base";
 import { MemoryCacheStore } from "./cache/memory";
 import { RateLimiter } from "./cache/rate-limiter";
 import type { CacheStore, RateLimitConfig } from "./cache/types";
-import { TenantManager } from "./tenant";
+import { TenantManager, type TenantGovConfig } from "./tenant";
 
 /** Max message content length (characters) — prevents OOM from huge payloads */
 const MAX_MESSAGE_LENGTH = 200_000;
@@ -72,6 +72,9 @@ export class AIGateway {
   private initialized = false;
   private shutdownRequested = false;
   private activeRequests = 0;
+  /** Per-tenant config cache: tenantId → { config, expiresAt } */
+  private readonly tenantConfigCache = new Map<string, { config: TenantGovConfig; expiresAt: number }>();
+  private readonly tenantConfigTtlMs = 60_000; // 1 minute cache
 
   constructor(config: GatewayConfig) {
     // Apply mode presets (individual settings override)
@@ -177,12 +180,24 @@ export class AIGateway {
       this.validateRequest(request);
       const model = request.model || "gpt-4o";
 
+      // 0b. Resolve per-tenant governance overrides
+      const tenantGov = this.resolveTenantGov(request.tenantId);
+      const effectivePii = this.resolvePiiDetector(tenantGov);
+      const effectiveGuard = this.resolvePromptGuard(tenantGov);
+
+      // 0c. Model restriction — check tenant allowed models
+      if (tenantGov?.allowedModels && tenantGov.allowedModels.length > 0) {
+        if (!tenantGov.allowedModels.some(m => model.toLowerCase().startsWith(m.toLowerCase()))) {
+          throw new BulwarkError("MODEL_NOT_ALLOWED", `Model "${model}" is not allowed for this tenant. Allowed: ${tenantGov.allowedModels.join(", ")}`);
+        }
+      }
+
       // 2. Prompt Injection Detection — scan ALL user messages, not just last
       let messages = [...request.messages]; // defensive copy
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
         if (msg.role === "user") {
-          const guardResult = this.promptGuard.scan(msg.content);
+          const guardResult = effectiveGuard.scan(msg.content);
           if (!guardResult.safe) {
             if (guardResult.sanitizedText) {
               messages = [...messages.slice(0, i), { ...msg, content: guardResult.sanitizedText }, ...messages.slice(i + 1)];
@@ -205,7 +220,7 @@ export class AIGateway {
         for (let i = 0; i < messages.length; i++) {
           const msg = messages[i];
           if (msg.role !== "user") continue;
-          const result = this.piiDetector.scan(msg.content);
+          const result = effectivePii.scan(msg.content);
           piiDetections.push(...result.matches);
           if (result.blocked) {
             await this.auditStore.log({
@@ -264,7 +279,7 @@ export class AIGateway {
       // Harden existing system prompt or inject one
       if (hasSystemMsg) {
         messages = messages.map(m => m.role === "system"
-          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false }) }
+          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false }) }
           : m
         );
       }
@@ -283,7 +298,7 @@ export class AIGateway {
           if (hasSystemMsg) {
             messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
           } else {
-            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false });
+            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false });
             messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
           }
         }
@@ -311,7 +326,7 @@ export class AIGateway {
       let outputContent = llmResponse.content;
       const outputPiiDetections: PIIMatch[] = [];
       if (request.pii !== false) {
-        const outputScan = this.piiDetector.scan(outputContent);
+        const outputScan = effectivePii.scan(outputContent);
         outputPiiDetections.push(...outputScan.matches);
         if (outputScan.redacted) outputContent = outputScan.text;
       }
@@ -378,12 +393,24 @@ export class AIGateway {
       this.validateRequest(request);
       const model = request.model || "gpt-4o";
 
+      // Resolve per-tenant governance overrides
+      const tenantGov = this.resolveTenantGov(request.tenantId);
+      const effectivePii = this.resolvePiiDetector(tenantGov);
+      const effectiveGuard = this.resolvePromptGuard(tenantGov);
+
+      // Model restriction — check tenant allowed models
+      if (tenantGov?.allowedModels && tenantGov.allowedModels.length > 0) {
+        if (!tenantGov.allowedModels.some(m => model.toLowerCase().startsWith(m.toLowerCase()))) {
+          throw new BulwarkError("MODEL_NOT_ALLOWED", `Model "${model}" is not allowed for this tenant. Allowed: ${tenantGov.allowedModels.join(", ")}`);
+        }
+      }
+
       // Prompt injection — scan ALL user messages (not just last)
       let messages = [...request.messages];
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
         if (msg.role === "user") {
-          const guardResult = this.promptGuard.scan(msg.content);
+          const guardResult = effectiveGuard.scan(msg.content);
           if (!guardResult.safe) {
             if (guardResult.sanitizedText) {
               messages = [...messages.slice(0, i), { ...msg, content: guardResult.sanitizedText }, ...messages.slice(i + 1)];
@@ -400,7 +427,7 @@ export class AIGateway {
         for (let i = 0; i < messages.length; i++) {
           const msg = messages[i];
           if (msg.role !== "user") continue;
-          const result = this.piiDetector.scan(msg.content);
+          const result = effectivePii.scan(msg.content);
           piiTypes.push(...result.matches.map(m => m.type));
           if (result.blocked) throw new BulwarkError("PII_BLOCKED", `PII detected and blocked in message ${i}`);
           if (result.redacted) {
@@ -430,7 +457,7 @@ export class AIGateway {
       const hasSystemMsg = messages.some(m => m.role === "system");
       if (hasSystemMsg) {
         messages = messages.map(m => m.role === "system"
-          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false }) }
+          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false }) }
           : m
         );
       }
@@ -446,7 +473,7 @@ export class AIGateway {
           if (hasSystemMsg) {
             messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
           } else {
-            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: this.piiDetector.config?.enabled ?? false });
+            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false });
             messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
           }
         }
@@ -473,7 +500,7 @@ export class AIGateway {
       // Stream with governance
       let fullContent = "";
       let finalUsage: ChatResponse["usage"] | undefined;
-      const piiAction = this.piiDetector.config?.action || "warn";
+      const piiAction = effectivePii.config?.action || "warn";
       const bufferForPii = request.pii !== false && (piiAction === "redact" || piiAction === "block");
 
       for await (const chunk of providerInstance.chatStream({ model, messages, temperature: request.temperature, maxTokens: request.maxTokens, topP: request.topP, stop: request.stop })) {
@@ -490,7 +517,7 @@ export class AIGateway {
 
       // Post-stream: output PII scan
       if (request.pii !== false) {
-        const outScan = this.piiDetector.scan(fullContent);
+        const outScan = effectivePii.scan(fullContent);
         if (outScan.matches.length > 0) {
           piiTypes.push(...outScan.matches.map(m => `output:${m.type}`));
         }
@@ -641,6 +668,51 @@ export class AIGateway {
     return { provider: name, providerInstance: instance };
   }
 
+  /**
+   * Resolve per-tenant governance config.
+   * Returns tenant overrides if tenantId is set and multi-tenant is enabled, undefined otherwise.
+   * Results are cached for tenantConfigTtlMs.
+   */
+  private resolveTenantGov(tenantId?: string): TenantGovConfig | undefined {
+    if (!tenantId || !this._tenantManager) return undefined;
+
+    const now = Date.now();
+    const cached = this.tenantConfigCache.get(tenantId);
+    if (cached && cached.expiresAt > now) return cached.config;
+
+    const config = this._tenantManager.getGovernance(tenantId);
+    if (config) {
+      this.tenantConfigCache.set(tenantId, { config, expiresAt: now + this.tenantConfigTtlMs });
+    }
+    return config;
+  }
+
+  /**
+   * Create a PII detector scoped to tenant overrides.
+   * Returns the tenant-specific detector, or the global one if no overrides.
+   */
+  private resolvePiiDetector(tenantGov?: TenantGovConfig): PIIDetector {
+    if (!tenantGov?.pii) return this.piiDetector;
+    return new PIIDetector({
+      enabled: tenantGov.pii.enabled ?? this.piiDetector.config.enabled,
+      action: tenantGov.pii.action ?? this.piiDetector.config.action,
+      types: tenantGov.pii.types ?? this.piiDetector.config.types,
+    });
+  }
+
+  /**
+   * Create a prompt guard scoped to tenant overrides.
+   * Returns the tenant-specific guard, or the global one if no overrides.
+   */
+  private resolvePromptGuard(tenantGov?: TenantGovConfig): PromptGuard {
+    if (!tenantGov?.promptGuard) return this.promptGuard;
+    return new PromptGuard({
+      enabled: tenantGov.promptGuard.enabled ?? this.promptGuard["config"].enabled,
+      action: tenantGov.promptGuard.action ?? this.promptGuard["config"].action,
+      sensitivity: tenantGov.promptGuard.sensitivity ?? this.promptGuard["config"].sensitivity,
+    } as PromptGuardConfig);
+  }
+
   /** Graceful shutdown — wait for in-flight requests, close connections */
   async shutdown(): Promise<void> {
     this.shutdownRequested = true;
@@ -704,7 +776,7 @@ export class BulwarkError extends Error {
     const map: Record<string, number> = {
       INVALID_REQUEST: 400, INVALID_CONFIG: 400,
       PII_BLOCKED: 403, POLICY_BLOCKED: 403, PROMPT_INJECTION: 400,
-      PROVIDER_NOT_CONFIGURED: 404,
+      PROVIDER_NOT_CONFIGURED: 404, MODEL_NOT_ALLOWED: 403,
       RATE_LIMITED: 429, BUDGET_EXCEEDED: 429,
       LLM_TIMEOUT: 504, LLM_ERROR: 502,
       SHUTTING_DOWN: 503,

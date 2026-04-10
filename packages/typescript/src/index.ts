@@ -38,7 +38,7 @@ export type { StreamEvent } from "./streaming";
 
 // Multi-tenant
 export { TenantManager } from "./tenant";
-export type { TenantConfig } from "./tenant";
+export type { TenantConfig, TenantGovConfig } from "./tenant";
 
 // Compliance
 export { GDPRManager } from "./compliance/gdpr";
