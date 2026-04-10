@@ -77,13 +77,16 @@ export class CCPAManager {
     return { data: [...auditData, ...usageData], requestId: id };
   }
 
-  /** Right to Delete — erase all consumer data */
-  deleteRequest(consumerId: string): { requestId: string; deleted: boolean } {
+  /** Right to Delete — erase all consumer data including RAG chunks */
+  async deleteRequest(consumerId: string): Promise<{ requestId: string; deleted: boolean }> {
     const id = `ccpa_${Date.now()}`;
-    this.db.run("DELETE FROM bulwark_audit WHERE user_id = ?", [consumerId]);
-    this.db.run("DELETE FROM bulwark_usage WHERE user_id = ?", [consumerId]);
+    await this.db.run("DELETE FROM bulwark_audit WHERE user_id = ?", [consumerId]);
+    await this.db.run("DELETE FROM bulwark_usage WHERE user_id = ?", [consumerId]);
+    // Also delete RAG chunks containing this consumer's data
+    const escapedId = consumerId.replace(/[%_]/g, "\\$&");
+    await this.db.run("DELETE FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", [`%"userId":"${escapedId}"%`]);
 
-    this.db.run("INSERT INTO bulwark_ccpa_requests (id, type, consumer_id, status, completed_at) VALUES (?, 'delete', ?, 'completed', datetime('now'))", [id, consumerId]);
+    await this.db.run("INSERT INTO bulwark_ccpa_requests (id, type, consumer_id, status, completed_at) VALUES (?, 'delete', ?, 'completed', datetime('now'))", [id, consumerId]);
 
     return { requestId: id, deleted: true };
   }

@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS bulwark_audit (
 CREATE INDEX IF NOT EXISTS idx_bulwark_audit_user ON bulwark_audit(user_id);
 CREATE INDEX IF NOT EXISTS idx_bulwark_audit_tenant ON bulwark_audit(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_bulwark_audit_timestamp ON bulwark_audit(timestamp);
+CREATE INDEX IF NOT EXISTS idx_bulwark_audit_action_ts ON bulwark_audit(action, timestamp);
+CREATE INDEX IF NOT EXISTS idx_bulwark_audit_provider ON bulwark_audit(provider, timestamp);
 
 CREATE TABLE IF NOT EXISTS bulwark_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

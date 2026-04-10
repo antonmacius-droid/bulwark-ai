@@ -102,11 +102,11 @@ function normalizeForScan(text: string): string {
 }
 
 export class PromptGuard {
-  private config: PromptGuardConfig;
+  readonly guardConfig: PromptGuardConfig;
   private patterns: typeof INJECTION_PATTERNS;
 
   constructor(config: PromptGuardConfig) {
-    this.config = config;
+    this.guardConfig = config;
     // Filter patterns by sensitivity — "high" sensitivity catches more (includes low-severity patterns)
     // "low" sensitivity only catches high-severity attacks
     const severityScore: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -117,7 +117,7 @@ export class PromptGuard {
 
   /** Scan user message for prompt injection attempts */
   scan(text: string): PromptGuardResult {
-    if (!this.config.enabled) return { safe: true, injections: [] };
+    if (!this.guardConfig.enabled) return { safe: true, injections: [] };
 
     const injections: PromptGuardResult["injections"] = [];
 
@@ -164,7 +164,7 @@ export class PromptGuard {
 
     if (injections.length === 0) return { safe: true, injections: [] };
 
-    if (this.config.action === "sanitize") {
+    if (this.guardConfig.action === "sanitize") {
       let sanitized = text;
       for (const { pattern } of this.patterns) {
         sanitized = sanitized.replace(new RegExp(pattern.source, pattern.flags), "[REDACTED]");

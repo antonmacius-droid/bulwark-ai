@@ -102,7 +102,7 @@ def create_bulwark_router(
             status = getattr(exc, "http_status", 500)
             return JSONResponse(
                 status_code=status,
-                content={"error": str(exc), "code": getattr(exc, "code", "INTERNAL_ERROR")},
+                content={"error": str(exc) if hasattr(exc, "code") else "Internal server error", "code": getattr(exc, "code", "INTERNAL_ERROR")},
             )
 
     @router.post("/stream")

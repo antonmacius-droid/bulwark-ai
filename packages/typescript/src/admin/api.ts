@@ -27,7 +27,7 @@ export async function getDashboard(db: Database, tenantId?: string): Promise<Adm
   const activeUsers = await db.queryOne<{ c: number }>(`SELECT COUNT(DISTINCT user_id) as c FROM bulwark_audit WHERE action = 'chat' AND timestamp >= ?${tf}`, [monthStr, ...tp]);
   const topModels = await db.queryAll<{ model: string; count: number; cost: number }>(`SELECT model, COUNT(*) as count, COALESCE(SUM(cost_usd), 0) as cost FROM bulwark_audit WHERE action = 'chat' AND timestamp >= ? AND model IS NOT NULL${tf} GROUP BY model ORDER BY count DESC LIMIT 10`, [monthStr, ...tp]);
   const topUsers = await db.queryAll<{ userId: string; count: number; cost: number }>(`SELECT user_id as userId, COUNT(*) as count, COALESCE(SUM(cost_usd), 0) as cost FROM bulwark_audit WHERE action = 'chat' AND timestamp >= ? AND user_id IS NOT NULL${tf} GROUP BY user_id ORDER BY cost DESC LIMIT 20`, [monthStr, ...tp]);
-  const costByTeam = await db.queryAll<{ teamId: string; cost: number; tokens: number }>(`SELECT team_id as teamId, COALESCE(SUM(cost_usd), 0) as cost, COALESCE(SUM(input_tokens + output_tokens), 0) as tokens FROM bulwark_usage WHERE timestamp >= ?${tf.replace("tenant_id", "tenant_id")} GROUP BY team_id ORDER BY cost DESC`, [monthStr, ...tp]);
+  const costByTeam = await db.queryAll<{ teamId: string; cost: number; tokens: number }>(`SELECT team_id as teamId, COALESCE(SUM(cost_usd), 0) as cost, COALESCE(SUM(input_tokens + output_tokens), 0) as tokens FROM bulwark_usage WHERE timestamp >= ?${tf} GROUP BY team_id ORDER BY cost DESC`, [monthStr, ...tp]);
 
   return {
     requestsToday: todayRow?.c || 0, requestsThisMonth: monthRow?.c || 0,
@@ -77,7 +77,7 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
     try {
       const result = await gateway.rag.ingest(content, { name, type: (type || "text") as "text", tenantId });
       res.json({ success: true, ...result });
-    } catch (err) { res.status(500).json({ error: err instanceof Error ? err.message : "Ingest failed" }); }
+    } catch (err) { res.status(500).json({ error: "Ingest failed" }); }
   });
 
   router.delete("/knowledge/:sourceId", async (req: Req & { params: { sourceId: string } }, res: Res) => {
@@ -85,7 +85,12 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
     try {
       await gateway.rag.deleteSource(req.params.sourceId);
       res.json({ success: true });
-    } catch (err) { res.status(403).json({ error: err instanceof Error ? err.message : "Delete failed" }); }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed";
+      // Tenant ownership violation → 403, otherwise → 500
+      const status = msg.includes("another tenant") ? 403 : 500;
+      res.status(status).json({ error: msg });
+    }
   });
 
   router.post("/knowledge/search", async (req: Req, res: Res) => {
@@ -151,6 +156,7 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
       scopeType: string; scopeId: string; monthlyTokenLimit: number; monthlyCostLimit?: number; tenantId?: string;
     };
     if (!scopeType || !scopeId) return res.status(400).json({ error: "scopeType and scopeId required" });
+    if (!["user", "team", "tenant"].includes(scopeType)) return res.status(400).json({ error: "scopeType must be: user, team, or tenant" });
     if (monthlyTokenLimit !== undefined && (typeof monthlyTokenLimit !== "number" || monthlyTokenLimit < 0)) {
       return res.status(400).json({ error: "monthlyTokenLimit must be a non-negative number" });
     }
@@ -259,9 +265,11 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
 
   // ═══ EXPORT ═══
   router.get("/export/audit", async (req: Req, res: Res) => {
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 1000), 5000);
+    const offset = Math.max(0, Number(req.query.offset) || 0);
     const entries = await gateway.audit.query({
       from: req.query.from, to: req.query.to,
-      limit: 10000, offset: 0,
+      limit, offset,
     });
     res.json(entries);
   });

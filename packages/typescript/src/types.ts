@@ -84,8 +84,8 @@ export interface GatewayConfig {
   /** LLM call timeout in ms (default: 120000) */
   timeoutMs?: number;
 
-  /** Cache store for rate limiting + response caching */
-  cache?: unknown;
+  /** Cache store for rate limiting + response caching (MemoryCacheStore or RedisCacheStore) */
+  cache?: import("./cache/types").CacheStore;
 
   /** Rate limiting config */
   rateLimit?: { enabled?: boolean; maxRequests?: number; windowSeconds?: number; scope?: "user" | "team" | "tenant" | "ip" };

@@ -92,7 +92,13 @@ export class PromptGuardML {
     this.initPromise = (async () => {
       const examples = [...INJECTION_EXAMPLES];
       if (this.config.customExamples) {
-        for (const text of this.config.customExamples) {
+        // SECURITY: Cap custom examples to prevent embedding poisoning
+        const MAX_CUSTOM_EXAMPLES = 50;
+        const MAX_EXAMPLE_LENGTH = 1000;
+        const validated = this.config.customExamples
+          .slice(0, MAX_CUSTOM_EXAMPLES)
+          .filter(t => typeof t === "string" && t.length > 0 && t.length <= MAX_EXAMPLE_LENGTH);
+        for (const text of validated) {
           examples.push({ category: "custom", text });
         }
       }

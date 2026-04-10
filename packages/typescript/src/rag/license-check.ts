@@ -8,7 +8,7 @@
  * Does NOT block functionality — just logs a notice for unlicensed commercial use.
  */
 
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 let noticeShown = false;
 
@@ -51,7 +51,14 @@ function verifyLicenseKey(key: string, secret: string): LicenseInfo {
 
   const payload = `${product}-${plan}-${org}-${expiry}`;
   const expectedSignature = computeSignature(payload, secret);
-  const valid = signature === expectedSignature;
+  // SECURITY: constant-time comparison to prevent timing attacks
+  let valid = false;
+  try {
+    valid = signature.length === expectedSignature.length &&
+      timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  } catch {
+    valid = false;
+  }
 
   const year = expiry.slice(0, 4);
   const month = expiry.slice(4, 6);

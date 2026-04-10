@@ -814,9 +814,9 @@ export class AIGateway {
   private resolvePromptGuard(tenantGov?: TenantGovConfig): PromptGuard {
     if (!tenantGov?.promptGuard) return this.promptGuard;
     return new PromptGuard({
-      enabled: tenantGov.promptGuard.enabled ?? this.promptGuard["config"].enabled,
-      action: tenantGov.promptGuard.action ?? this.promptGuard["config"].action,
-      sensitivity: tenantGov.promptGuard.sensitivity ?? this.promptGuard["config"].sensitivity,
+      enabled: tenantGov.promptGuard.enabled ?? this.promptGuard.guardConfig.enabled,
+      action: tenantGov.promptGuard.action ?? this.promptGuard.guardConfig.action,
+      sensitivity: tenantGov.promptGuard.sensitivity ?? this.promptGuard.guardConfig.sensitivity,
     } as PromptGuardConfig);
   }
 
@@ -889,7 +889,7 @@ export class BulwarkError extends Error {
     const map: Record<string, number> = {
       INVALID_REQUEST: 400, INVALID_CONFIG: 400,
       PII_BLOCKED: 403, POLICY_BLOCKED: 403, PROMPT_INJECTION: 400,
-      PROVIDER_NOT_CONFIGURED: 404, MODEL_NOT_ALLOWED: 403,
+      GATEWAY_DISABLED: 503, PROVIDER_NOT_CONFIGURED: 404, MODEL_NOT_ALLOWED: 403,
       RATE_LIMITED: 429, BUDGET_EXCEEDED: 429, CONCURRENCY_EXCEEDED: 429,
       LLM_TIMEOUT: 504, LLM_ERROR: 502,
       SHUTTING_DOWN: 503,

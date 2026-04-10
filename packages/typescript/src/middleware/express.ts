@@ -110,11 +110,11 @@ export function bulwarkRouter(gateway: AIGateway, options?: {
       const limit = Math.min(Math.max(1, Number(req.query.limit) || 50), 1000);
       const offset = Math.max(0, Number(req.query.offset) || 0);
 
-      // Non-admin users can only query their own audit entries
+      // SECURITY: Auth context ALWAYS takes precedence — never fall back to query params for identity
       const entries = await gateway.audit.query({
-        userId: authCtx.userId || (typeof req.query.userId === "string" ? req.query.userId : undefined),
-        teamId: typeof req.query.teamId === "string" ? req.query.teamId : undefined,
-        tenantId: authCtx.tenantId || (typeof req.query.tenantId === "string" ? req.query.tenantId : undefined),
+        userId: authCtx.userId,
+        teamId: authCtx.teamId || (typeof req.query.teamId === "string" ? req.query.teamId : undefined),
+        tenantId: authCtx.tenantId,
         action: typeof req.query.action === "string" ? req.query.action : undefined,
         from: typeof req.query.from === "string" ? req.query.from : undefined,
         to: typeof req.query.to === "string" ? req.query.to : undefined,

@@ -109,11 +109,11 @@ def create_bulwark_blueprint(
             return jsonify(_serialize_response(response))
 
         except Exception as exc:
+            code = getattr(exc, "code", "INTERNAL_ERROR")
             status = getattr(exc, "http_status", 500)
-            return jsonify({
-                "error": str(exc),
-                "code": getattr(exc, "code", "INTERNAL_ERROR"),
-            }), status
+            # Only expose error details for BulwarkError; sanitize internal errors
+            msg = str(exc) if hasattr(exc, "code") else "Internal server error"
+            return jsonify({"error": msg, "code": code}), status
 
     @bp.route("/stream", methods=["POST"])
     def stream_endpoint():

@@ -148,7 +148,7 @@ export class GDPRManager {
       const countSql = sql.replace(/^DELETE FROM/, "SELECT COUNT(*) as c FROM");
       const row = await this.db.queryOne<{ c: number }>(countSql, [param]);
       const count = row?.c || 0;
-      this.db.run(sql, [param]);
+      await this.db.run(sql, [param]);
       return count;
     } catch {
       return 0;
