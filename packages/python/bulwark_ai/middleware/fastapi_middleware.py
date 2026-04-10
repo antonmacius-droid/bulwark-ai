@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import traceback
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from ..errors import BulwarkError
 from ..types import ChatMessage, ChatRequest
 
 # Type aliases -- the actual gateway is provided by the caller
@@ -102,7 +102,7 @@ def create_bulwark_router(
             status = getattr(exc, "http_status", 500)
             return JSONResponse(
                 status_code=status,
-                content={"error": str(exc) if hasattr(exc, "code") else "Internal server error", "code": getattr(exc, "code", "INTERNAL_ERROR")},
+                content={"error": exc.message if isinstance(exc, BulwarkError) else "Internal server error", "code": getattr(exc, "code", "INTERNAL_ERROR")},
             )
 
     @router.post("/stream")

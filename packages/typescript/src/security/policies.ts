@@ -84,9 +84,11 @@ export class PolicyEngine {
             // ReDoS protection — reject patterns with nested quantifiers
             if (/\([^)]*[+*][^)]*\)[+*]/.test(policy.regex)) break;
             if (/(\.\*){3,}/.test(policy.regex)) break;
+            // Cap input length to prevent polynomial regex on large payloads
+            const cappedText = text.length > 50_000 ? text.slice(0, 50_000) : text;
             try {
               const regex = new RegExp(policy.regex, "gi");
-              const match = regex.exec(text);
+              const match = regex.exec(cappedText);
               if (match) {
                 violated = true;
                 matchedPattern = match[0];

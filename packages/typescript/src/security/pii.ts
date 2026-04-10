@@ -92,9 +92,11 @@ export class PIIDetector {
           if (/(\.\*){3,}/.test(custom.pattern)) continue;
 
           const regex = new RegExp(custom.pattern, "gi");
+          // Cap input length for custom patterns to prevent ReDoS on large payloads
+          const cappedText = text.length > 50_000 ? text.slice(0, 50_000) : text;
           let match: RegExpExecArray | null;
           let count = 0;
-          while ((match = regex.exec(text)) !== null) {
+          while ((match = regex.exec(cappedText)) !== null) {
             if (++count > 100) break; // max 100 matches per pattern
             if (match[0].length === 0) { regex.lastIndex++; continue; }
             matches.push({

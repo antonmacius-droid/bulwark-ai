@@ -13,6 +13,7 @@ import asyncio
 import json
 from typing import Any, Callable, Dict, Optional
 
+from ..errors import BulwarkError
 from ..types import ChatMessage, ChatRequest
 
 AuthContext = Dict[str, Optional[str]]
@@ -112,7 +113,7 @@ def create_bulwark_blueprint(
             code = getattr(exc, "code", "INTERNAL_ERROR")
             status = getattr(exc, "http_status", 500)
             # Only expose error details for BulwarkError; sanitize internal errors
-            msg = str(exc) if hasattr(exc, "code") else "Internal server error"
+            msg = exc.message if isinstance(exc, BulwarkError) else "Internal server error"
             return jsonify({"error": msg, "code": code}), status
 
     @bp.route("/stream", methods=["POST"])

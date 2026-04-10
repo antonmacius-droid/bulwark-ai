@@ -29,9 +29,24 @@ export async function parsePDF(buffer: Buffer): Promise<string> {
  * Strips all tags, scripts, styles, and normalizes whitespace.
  */
 export function parseHTML(html: string): string {
-  return html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+  // Remove script/style blocks by finding start/end tags iteratively (avoids ReDoS)
+  let text = html;
+  for (const tag of ["script", "style"]) {
+    let result = "";
+    let remaining = text;
+    const openRe = new RegExp(`<${tag}[\\s>]`, "i");
+    const closeTag = `</${tag}>`;
+    let match: RegExpExecArray | null;
+    while ((match = openRe.exec(remaining)) !== null) {
+      result += remaining.slice(0, match.index);
+      const closeIdx = remaining.toLowerCase().indexOf(closeTag.toLowerCase(), match.index);
+      if (closeIdx === -1) { remaining = ""; break; }
+      remaining = remaining.slice(closeIdx + closeTag.length);
+    }
+    result += remaining;
+    text = result;
+  }
+  return text
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")

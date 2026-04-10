@@ -83,7 +83,7 @@ export class CCPAManager {
     await this.db.run("DELETE FROM bulwark_audit WHERE user_id = ?", [consumerId]);
     await this.db.run("DELETE FROM bulwark_usage WHERE user_id = ?", [consumerId]);
     // Also delete RAG chunks containing this consumer's data
-    const escapedId = consumerId.replace(/[%_]/g, "\\$&");
+    const escapedId = consumerId.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
     await this.db.run("DELETE FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", [`%"userId":"${escapedId}"%`]);
 
     await this.db.run("INSERT INTO bulwark_ccpa_requests (id, type, consumer_id, status, completed_at) VALUES (?, 'delete', ?, 'completed', datetime('now'))", [id, consumerId]);

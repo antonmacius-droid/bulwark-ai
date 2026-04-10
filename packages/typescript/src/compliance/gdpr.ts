@@ -70,7 +70,7 @@ export class GDPRManager {
     }
     const usage = await this.deleteAndCount("DELETE FROM bulwark_usage WHERE user_id = ?", userId);
     // Escape LIKE special chars (%, _) in userId to prevent unintended matches
-    const escapedId = userId.replace(/[%_]/g, "\\$&");
+    const escapedId = userId.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
     const chunks = await this.deleteAndCount("DELETE FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", `%"userId":"${escapedId}"%`);
     return { audit, usage, chunks };
   }
@@ -93,7 +93,7 @@ export class GDPRManager {
   async exportUserData(userId: string): Promise<UserDataExport> {
     const auditEntries = await this.db.queryAll("SELECT * FROM bulwark_audit WHERE user_id = ? ORDER BY timestamp DESC", [userId]);
     const usageRecords = await this.db.queryAll("SELECT * FROM bulwark_usage WHERE user_id = ? ORDER BY timestamp DESC", [userId]);
-    const escapedId = userId.replace(/[%_]/g, "\\$&");
+    const escapedId = userId.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
     const knowledgeChunks = await this.db.queryAll("SELECT id, source_id, content, metadata, created_at FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", [`%"userId":"${escapedId}"%`]);
 
     return {
