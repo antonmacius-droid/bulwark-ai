@@ -224,13 +224,13 @@ describe("9. Streaming", () => {
 
 // ═══ 10. MULTI-TENANT ═══
 describe("10. Multi-tenant", () => {
-  testIf("create + list tenants", () => {
-    const t = gateway.tenants!.create("Test Org"); expect(t.id).toMatch(/^tenant_/);
-    expect(gateway.tenants!.list().some(x => x.id === t.id)).toBe(true);
+  testIf("create + list tenants", async () => {
+    const t = await gateway.tenants!.create("Test Org"); expect(t.id).toMatch(/^tenant_/);
+    expect((await gateway.tenants!.list()).some(x => x.id === t.id)).toBe(true);
   });
-  testIf("delete tenant", () => {
-    const t = gateway.tenants!.create("Del Me"); gateway.tenants!.delete(t.id);
-    expect(gateway.tenants!.list().some(x => x.id === t.id)).toBe(false);
+  testIf("delete tenant", async () => {
+    const t = await gateway.tenants!.create("Del Me"); gateway.tenants!.delete(t.id);
+    expect((await gateway.tenants!.list()).some(x => x.id === t.id)).toBe(false);
   });
 });
 
@@ -264,30 +264,30 @@ describe("13. GDPR", () => {
   testIf("right to erasure", async () => {
     await chat("gdpr erase", { userId: "gdpr-e" });
     expect((await gateway.audit.query({ userId: "gdpr-e" })).entries.length).toBeGreaterThan(0);
-    gdpr.eraseUserData("gdpr-e");
+    await gdpr.eraseUserData("gdpr-e");
     expect((await gateway.audit.query({ userId: "gdpr-e" })).entries.length).toBe(0);
   }, T);
   testIf("data export", async () => {
     await chat("gdpr export", { userId: "gdpr-x" });
-    const d = gdpr.exportUserData("gdpr-x");
+    const d = await gdpr.exportUserData("gdpr-x");
     expect(d.userId).toBe("gdpr-x"); expect(d.auditEntries.length).toBeGreaterThan(0);
   }, T);
-  testIf("processing report", () => {
-    const r = gdpr.generateProcessingReport();
+  testIf("processing report", async () => {
+    const r = await gdpr.generateProcessingReport();
     expect(r.totalRequests).toBeGreaterThan(0); expect(r.generatedAt).toBeDefined();
   });
 });
 
 // ═══ 14. SOC 2 ═══
 describe("14. SOC 2", () => {
-  testIf("change tracking", () => {
+  testIf("change tracking", async () => {
     soc2.logChange({ entityType: "policy", entityId: "test", action: "updated", changedBy: "admin" });
-    const h = soc2.getChangeHistory("policy", "test");
+    const h = await soc2.getChangeHistory("policy", "test");
     expect(h.length).toBeGreaterThanOrEqual(1);
   });
   testIf("anomaly detection", async () => { expect(Array.isArray(await soc2.detectAnomalies())).toBe(true); });
-  testIf("vendor report", () => { expect(soc2.generateVendorReport().generatedAt).toBeDefined(); });
-  testIf("health check", () => { const h = soc2.getHealthStatus(0); expect(h.status).toBe("healthy"); });
+  testIf("vendor report", async () => { expect((await soc2.generateVendorReport()).generatedAt).toBeDefined(); });
+  testIf("health check", async () => { const h = await soc2.getHealthStatus(0); expect(h.status).toBe("healthy"); });
 });
 
 // ═══ 15. CONCURRENT ═══
@@ -466,7 +466,7 @@ The CTO is responsible for the TypeScript SDK, while the Python SDK is planned f
     expect(before.length).toBeGreaterThan(0);
 
     // Delete source
-    kb.deleteSource(sourceId);
+    await kb.deleteSource(sourceId);
 
     // Verify it's gone
     const after = await kb.search("Temporary data");

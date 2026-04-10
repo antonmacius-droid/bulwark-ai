@@ -113,7 +113,7 @@ export class KnowledgeBase {
       params.push(options.sourceId);
     }
 
-    const rows = this.db.queryAll<{
+    const rows = await this.db.queryAll<{
       id: string; source_id: string; source_name: string;
       content: string; embedding: Buffer; metadata: string; tenant_id: string;
     }>(sql, params);
@@ -146,7 +146,7 @@ export class KnowledgeBase {
   }
 
   /** List all knowledge sources */
-  listSources(tenantId?: string): KnowledgeSource[] {
+  async listSources(tenantId?: string): Promise<KnowledgeSource[]> {
     let sql = "SELECT * FROM bulwark_knowledge_sources";
     const params: unknown[] = [];
     if (tenantId) {
@@ -157,14 +157,14 @@ export class KnowledgeBase {
       sql += " WHERE (tenant_id IS NULL OR tenant_id = '')";
     }
     sql += " ORDER BY created_at DESC";
-    return this.db.queryAll<KnowledgeSource>(sql, params);
+    return await this.db.queryAll<KnowledgeSource>(sql, params);
   }
 
   /** Delete a knowledge source and all its chunks. If tenantId provided, verifies ownership. */
-  deleteSource(sourceId: string, tenantId?: string): void {
+  async deleteSource(sourceId: string, tenantId?: string): Promise<void> {
     if (tenantId) {
       // Verify tenant owns this source
-      const source = this.db.queryOne<{ tenant_id: string }>("SELECT tenant_id FROM bulwark_knowledge_sources WHERE id = ?", [sourceId]);
+      const source = await this.db.queryOne<{ tenant_id: string }>("SELECT tenant_id FROM bulwark_knowledge_sources WHERE id = ?", [sourceId]);
       if (source && source.tenant_id && source.tenant_id !== tenantId) {
         throw new Error("Cannot delete source belonging to another tenant");
       }

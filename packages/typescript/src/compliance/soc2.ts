@@ -109,8 +109,8 @@ export class SOC2Manager {
   }
 
   /** Get change history for an entity */
-  getChangeHistory(entityType: string, entityId: string): ChangeLogEntry[] {
-    return this.db.queryAll<ChangeLogEntry>(
+  async getChangeHistory(entityType: string, entityId: string): Promise<ChangeLogEntry[]> {
+    return await this.db.queryAll<ChangeLogEntry>(
       "SELECT * FROM bulwark_change_log WHERE entity_type = ? AND entity_id = ? ORDER BY timestamp DESC LIMIT 100",
       [entityType, entityId]
     );
@@ -125,7 +125,7 @@ export class SOC2Manager {
     // High request rate per user
     if (this.config.anomalyThresholds?.maxRequestsPerUserPerHour) {
       const threshold = this.config.anomalyThresholds.maxRequestsPerUserPerHour;
-      const highUsers = this.db.queryAll<{ user_id: string; c: number }>(
+      const highUsers = await this.db.queryAll<{ user_id: string; c: number }>(
         "SELECT user_id, COUNT(*) as c FROM bulwark_audit WHERE timestamp >= ? AND user_id IS NOT NULL GROUP BY user_id HAVING c > ?",
         [oneHourAgo, threshold]
       );
@@ -142,7 +142,7 @@ export class SOC2Manager {
     // PII detection spike
     if (this.config.anomalyThresholds?.maxPiiPerHour) {
       const threshold = this.config.anomalyThresholds.maxPiiPerHour;
-      const piiCount = this.db.queryOne<{ c: number }>(
+      const piiCount = await this.db.queryOne<{ c: number }>(
         "SELECT COUNT(*) as c FROM bulwark_audit WHERE timestamp >= ? AND pii_detections > 0",
         [oneHourAgo]
       );
@@ -159,7 +159,7 @@ export class SOC2Manager {
     // Cost spike per user per day
     if (this.config.anomalyThresholds?.maxCostPerUserPerDay) {
       const threshold = this.config.anomalyThresholds.maxCostPerUserPerDay;
-      const highCostUsers = this.db.queryAll<{ user_id: string; total_cost: number }>(
+      const highCostUsers = await this.db.queryAll<{ user_id: string; total_cost: number }>(
         "SELECT user_id, SUM(cost_usd) as total_cost FROM bulwark_usage WHERE timestamp >= ? AND user_id IS NOT NULL GROUP BY user_id HAVING total_cost > ?",
         [oneDayAgo, threshold]
       );
@@ -177,12 +177,12 @@ export class SOC2Manager {
   }
 
   /** Generate vendor/sub-processor report for SOC 2 auditors */
-  generateVendorReport(): VendorReport {
+  async generateVendorReport(): Promise<VendorReport> {
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const providers = this.db.queryAll<{ provider: string; c: number; tokens: number; cost: number }>(
+    const providers = await this.db.queryAll<{ provider: string; c: number; tokens: number; cost: number }>(
       "SELECT provider, COUNT(*) as c, COALESCE(SUM(input_tokens + output_tokens), 0) as tokens, COALESCE(SUM(cost_usd), 0) as cost FROM bulwark_audit WHERE provider IS NOT NULL AND timestamp >= ? GROUP BY provider",
       [monthStart.toISOString()]
     );
@@ -207,10 +207,10 @@ export class SOC2Manager {
   }
 
   /** Health check endpoint data */
-  getHealthStatus(activeRequests: number): HealthStatus {
+  async getHealthStatus(activeRequests: number): Promise<HealthStatus> {
     let dbStatus: "connected" | "error" = "error";
     try {
-      this.db.queryOne("SELECT 1");
+      await this.db.queryOne("SELECT 1");
       dbStatus = "connected";
     } catch { /* db error */ }
 

@@ -222,7 +222,7 @@ export class AIGateway {
       const model = request.model || "gpt-4o";
 
       // 0b. Resolve per-tenant governance overrides
-      const tenantGov = this.resolveTenantGov(request.tenantId);
+      const tenantGov = await this.resolveTenantGov(request.tenantId);
       const effectivePii = this.resolvePiiDetector(tenantGov);
       const effectiveGuard = this.resolvePromptGuard(tenantGov);
 
@@ -480,7 +480,7 @@ export class AIGateway {
       const model = request.model || "gpt-4o";
 
       // Resolve per-tenant governance overrides
-      const tenantGov = this.resolveTenantGov(request.tenantId);
+      const tenantGov = await this.resolveTenantGov(request.tenantId);
       const effectivePii = this.resolvePiiDetector(tenantGov);
       const effectiveGuard = this.resolvePromptGuard(tenantGov);
 
@@ -780,14 +780,14 @@ export class AIGateway {
    * Returns tenant overrides if tenantId is set and multi-tenant is enabled, undefined otherwise.
    * Results are cached for tenantConfigTtlMs.
    */
-  private resolveTenantGov(tenantId?: string): TenantGovConfig | undefined {
+  private async resolveTenantGov(tenantId?: string): Promise<TenantGovConfig | undefined> {
     if (!tenantId || !this._tenantManager) return undefined;
 
     const now = Date.now();
     const cached = this.tenantConfigCache.get(tenantId);
     if (cached && cached.expiresAt > now) return cached.config;
 
-    const config = this._tenantManager.getGovernance(tenantId);
+    const config = await this._tenantManager.getGovernance(tenantId);
     if (config) {
       this.tenantConfigCache.set(tenantId, { config, expiresAt: now + this.tenantConfigTtlMs });
     }

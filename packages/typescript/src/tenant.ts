@@ -65,7 +65,7 @@ export class TenantManager {
   }
 
   /** Create a new tenant */
-  create(name: string, settings?: Record<string, unknown>): TenantConfig {
+  async create(name: string, settings?: Record<string, unknown>): Promise<TenantConfig> {
     const id = `tenant_${uuid().slice(0, 8)}`;
     this.db.run(
       "INSERT INTO bulwark_tenants (id, name, settings) VALUES (?, ?, ?)",
@@ -87,8 +87,8 @@ export class TenantManager {
   }
 
   /** Get a tenant by ID */
-  get(id: string): TenantConfig | null {
-    const row = this.db.queryOne<{ id: string; name: string; settings: string; created_at: string }>(
+  async get(id: string): Promise<TenantConfig | null> {
+    const row = await this.db.queryOne<{ id: string; name: string; settings: string; created_at: string }>(
       "SELECT * FROM bulwark_tenants WHERE id = ?", [id]
     );
     if (!row) return null;
@@ -96,8 +96,8 @@ export class TenantManager {
   }
 
   /** List all tenants */
-  list(): TenantConfig[] {
-    const rows = this.db.queryAll<{ id: string; name: string; settings: string; created_at: string }>(
+  async list(): Promise<TenantConfig[]> {
+    const rows = await this.db.queryAll<{ id: string; name: string; settings: string; created_at: string }>(
       "SELECT * FROM bulwark_tenants ORDER BY created_at DESC"
     );
     return rows.map(r => this.parseRow(r));
@@ -110,13 +110,13 @@ export class TenantManager {
   }
 
   /** Get governance config for a tenant */
-  getGovernance(id: string): TenantGovConfig | undefined {
-    return this.get(id)?.governance;
+  async getGovernance(id: string): Promise<TenantGovConfig | undefined> {
+    return (await this.get(id))?.governance;
   }
 
   /** Set governance config for a tenant (merges with existing settings) */
-  setGovernance(id: string, governance: TenantGovConfig): void {
-    const tenant = this.get(id);
+  async setGovernance(id: string, governance: TenantGovConfig): Promise<void> {
+    const tenant = await this.get(id);
     if (!tenant) throw new Error(`Tenant not found: ${id}`);
     const settings = { ...(tenant.settings || {}), governance };
     this.db.run("UPDATE bulwark_tenants SET settings = ? WHERE id = ?", [JSON.stringify(settings), id]);
@@ -141,17 +141,17 @@ export class TenantManager {
   }
 
   /** Get usage stats for a tenant */
-  getUsage(id: string): { requests: number; tokens: number; costUsd: number; activeUsers: number } {
+  async getUsage(id: string): Promise<{ requests: number; tokens: number; costUsd: number; activeUsers: number }> {
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
     const monthStr = monthStart.toISOString();
 
-    const usage = this.db.queryOne<{ requests: number; tokens: number; cost: number }>(
+    const usage = await this.db.queryOne<{ requests: number; tokens: number; cost: number }>(
       "SELECT COUNT(*) as requests, COALESCE(SUM(input_tokens + output_tokens), 0) as tokens, COALESCE(SUM(cost_usd), 0) as cost FROM bulwark_usage WHERE tenant_id = ? AND timestamp >= ?",
       [id, monthStr]
     );
-    const users = this.db.queryOne<{ c: number }>(
+    const users = await this.db.queryOne<{ c: number }>(
       "SELECT COUNT(DISTINCT user_id) as c FROM bulwark_audit WHERE tenant_id = ? AND timestamp >= ?",
       [id, monthStr]
     );

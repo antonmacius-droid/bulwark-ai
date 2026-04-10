@@ -161,24 +161,16 @@ export class PostgresDatabase implements Database {
     this.pool.query(sql, params).catch(err => console.error("[Bulwark] Postgres write error:", err));
   }
 
-  queryOne<T>(sql: string, params?: unknown[]): T | undefined {
-    // Note: sync interface limitation with Postgres — use queryOneAsync for production
-    // This blocks the event loop and should be avoided in hot paths
+  async queryOne<T>(sql: string, params?: unknown[]): Promise<T | undefined> {
     if (!this.pool) return undefined;
-    let result: T | undefined;
-    this.pool.query(sql, params)
-      .then(r => { result = (r.rows as T[])[0]; })
-      .catch(() => {});
-    return result;
+    const r = await this.pool.query(sql, params);
+    return (r.rows as T[])[0];
   }
 
-  queryAll<T>(sql: string, params?: unknown[]): T[] {
+  async queryAll<T>(sql: string, params?: unknown[]): Promise<T[]> {
     if (!this.pool) return [];
-    let result: T[] = [];
-    this.pool.query(sql, params)
-      .then(r => { result = r.rows as T[]; })
-      .catch(() => {});
-    return result;
+    const r = await this.pool.query(sql, params);
+    return r.rows as T[];
   }
 
   close(): void {

@@ -107,12 +107,12 @@ export class HIPAAManager {
   }
 
   /** Query PHI access log */
-  getAccessLog(userId?: string, limit = 100): PHIAccessLog[] {
+  async getAccessLog(userId?: string, limit = 100): Promise<PHIAccessLog[]> {
     const sql = userId
       ? "SELECT * FROM bulwark_hipaa_access_log WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?"
       : "SELECT * FROM bulwark_hipaa_access_log ORDER BY timestamp DESC LIMIT ?";
     const params = userId ? [userId, limit] : [limit];
-    return this.db.queryAll<PHIAccessLog>(sql, params);
+    return await this.db.queryAll<PHIAccessLog>(sql, params);
   }
 
   /** Register a BAA (Business Associate Agreement) with a provider */
@@ -125,8 +125,8 @@ export class HIPAAManager {
   }
 
   /** Check if a provider has a valid BAA */
-  hasValidBAA(provider: string): boolean {
-    const baa = this.db.queryOne<{ status: string; expiry_date: string | null }>(
+  async hasValidBAA(provider: string): Promise<boolean> {
+    const baa = await this.db.queryOne<{ status: string; expiry_date: string | null }>(
       "SELECT status, expiry_date FROM bulwark_hipaa_baa WHERE provider = ? AND status = 'active' ORDER BY signed_date DESC LIMIT 1",
       [provider]
     );
@@ -136,10 +136,10 @@ export class HIPAAManager {
   }
 
   /** Verify provider has BAA before sending data (if requireBAA is enabled) */
-  verifyProvider(provider: string): { allowed: boolean; reason?: string } {
+  async verifyProvider(provider: string): Promise<{ allowed: boolean; reason?: string }> {
     if (!this.config.requireBAA) return { allowed: true };
     if (this.config.baaProviders?.includes(provider)) return { allowed: true };
-    if (this.hasValidBAA(provider)) return { allowed: true };
+    if (await this.hasValidBAA(provider)) return { allowed: true };
     return { allowed: false, reason: `No BAA on file for provider: ${provider}. HIPAA requires a signed BAA before processing PHI.` };
   }
 
@@ -149,17 +149,17 @@ export class HIPAAManager {
   }
 
   /** Generate HIPAA compliance report */
-  generateComplianceReport(): {
+  async generateComplianceReport(): Promise<{
     phiAccessEvents: number;
     uniqueUsers: number;
     activeBAAs: number;
     deidentificationEnabled: boolean;
     auditLogging: boolean;
     recommendations: string[];
-  } {
-    const events = this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_hipaa_access_log");
-    const users = this.db.queryOne<{ c: number }>("SELECT COUNT(DISTINCT user_id) as c FROM bulwark_hipaa_access_log");
-    const baas = this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_hipaa_baa WHERE status = 'active'");
+  }> {
+    const events = await this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_hipaa_access_log");
+    const users = await this.db.queryOne<{ c: number }>("SELECT COUNT(DISTINCT user_id) as c FROM bulwark_hipaa_access_log");
+    const baas = await this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_hipaa_baa WHERE status = 'active'");
 
     const recommendations: string[] = [];
     if (!this.config.auditPhiAccess) recommendations.push("Enable PHI access audit logging (auditPhiAccess: true)");

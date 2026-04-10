@@ -32,7 +32,7 @@ export class BudgetManager {
 
     // Check user budget
     if (scope.userId) {
-      const row = this.db.queryOne<{ total_tokens: number; total_cost: number }>(
+      const row = await this.db.queryOne<{ total_tokens: number; total_cost: number }>(
         "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens, COALESCE(SUM(cost_usd), 0) as total_cost FROM bulwark_usage WHERE user_id = ? AND timestamp >= ?",
         [scope.userId, monthStr]
       );
@@ -58,7 +58,7 @@ export class BudgetManager {
 
     // Check team budget
     if (scope.teamId) {
-      const row = this.db.queryOne<{ total_tokens: number; total_cost: number }>(
+      const row = await this.db.queryOne<{ total_tokens: number; total_cost: number }>(
         "SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens, COALESCE(SUM(cost_usd), 0) as total_cost FROM bulwark_usage WHERE team_id = ? AND timestamp >= ?",
         [scope.teamId, monthStr]
       );

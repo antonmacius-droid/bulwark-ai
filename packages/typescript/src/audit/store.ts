@@ -40,12 +40,12 @@ export function createAuditStore(db: Database): AuditStore {
       if (filters.from) { where += " AND timestamp >= ?"; params.push(filters.from); }
       if (filters.to) { where += " AND timestamp <= ?"; params.push(filters.to); }
 
-      const totalRow = db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit ${where}`, params);
+      const totalRow = await db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit ${where}`, params);
       const total = totalRow?.c || 0;
 
       const limit = filters.limit || 50;
       const offset = filters.offset || 0;
-      const entries = db.queryAll<AuditEntry>(
+      const entries = await db.queryAll<AuditEntry>(
         `SELECT * FROM bulwark_audit ${where} ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
         [...params, limit, offset]
       );

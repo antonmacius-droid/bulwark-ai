@@ -67,10 +67,10 @@ export class CCPAManager {
   }
 
   /** Right to Know — return all data for a consumer */
-  accessRequest(consumerId: string): { data: unknown[]; requestId: string } {
+  async accessRequest(consumerId: string): Promise<{ data: unknown[]; requestId: string }> {
     const id = `ccpa_${Date.now()}`;
-    const auditData = this.db.queryAll("SELECT * FROM bulwark_audit WHERE user_id = ? ORDER BY timestamp DESC", [consumerId]);
-    const usageData = this.db.queryAll("SELECT * FROM bulwark_usage WHERE user_id = ? ORDER BY timestamp DESC", [consumerId]);
+    const auditData = await this.db.queryAll("SELECT * FROM bulwark_audit WHERE user_id = ? ORDER BY timestamp DESC", [consumerId]);
+    const usageData = await this.db.queryAll("SELECT * FROM bulwark_usage WHERE user_id = ? ORDER BY timestamp DESC", [consumerId]);
 
     this.db.run("INSERT INTO bulwark_ccpa_requests (id, type, consumer_id, status, completed_at) VALUES (?, 'access', ?, 'completed', datetime('now'))", [id, consumerId]);
 
@@ -97,8 +97,8 @@ export class CCPAManager {
   }
 
   /** Check if consumer has opted out */
-  isOptedOut(consumerId: string): boolean {
-    const row = this.db.queryOne<{ opted_out: number }>(
+  async isOptedOut(consumerId: string): Promise<boolean> {
+    const row = await this.db.queryOne<{ opted_out: number }>(
       "SELECT opted_out FROM bulwark_ccpa_optout WHERE consumer_id = ?", [consumerId]
     );
     return !!row?.opted_out;
@@ -111,25 +111,25 @@ export class CCPAManager {
   }
 
   /** Get all consumer requests (for compliance reporting) */
-  getRequests(consumerId?: string, limit = 100): ConsumerRequest[] {
+  async getRequests(consumerId?: string, limit = 100): Promise<ConsumerRequest[]> {
     const sql = consumerId
       ? "SELECT * FROM bulwark_ccpa_requests WHERE consumer_id = ? ORDER BY requested_at DESC LIMIT ?"
       : "SELECT * FROM bulwark_ccpa_requests ORDER BY requested_at DESC LIMIT ?";
-    return this.db.queryAll(sql, consumerId ? [consumerId, limit] : [limit]);
+    return await this.db.queryAll(sql, consumerId ? [consumerId, limit] : [limit]);
   }
 
   /** Generate CCPA compliance report */
-  generateReport(): {
+  async generateReport(): Promise<{
     totalRequests: number;
     byType: Record<string, number>;
     optedOutConsumers: number;
     gpcSignals: number;
     avgResponseTime: string;
-  } {
-    const total = this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_ccpa_requests");
-    const byType = this.db.queryAll<{ type: string; c: number }>("SELECT type, COUNT(*) as c FROM bulwark_ccpa_requests GROUP BY type");
-    const optedOut = this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_ccpa_optout WHERE opted_out = 1");
-    const gpc = this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_ccpa_optout WHERE gpc_signal = 1");
+  }> {
+    const total = await this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_ccpa_requests");
+    const byType = await this.db.queryAll<{ type: string; c: number }>("SELECT type, COUNT(*) as c FROM bulwark_ccpa_requests GROUP BY type");
+    const optedOut = await this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_ccpa_optout WHERE opted_out = 1");
+    const gpc = await this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_ccpa_optout WHERE gpc_signal = 1");
 
     return {
       totalRequests: total?.c || 0,

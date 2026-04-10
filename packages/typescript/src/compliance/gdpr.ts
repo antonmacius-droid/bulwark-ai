@@ -57,35 +57,35 @@ export class GDPRManager {
    * Right to Erasure (Article 17) — delete ALL data for a user.
    * Returns count of deleted records per table.
    */
-  eraseUserData(userId: string): { audit: number; usage: number; chunks: number } {
-    const audit = this.deleteAndCount("DELETE FROM bulwark_audit WHERE user_id = ?", userId);
-    const usage = this.deleteAndCount("DELETE FROM bulwark_usage WHERE user_id = ?", userId);
+  async eraseUserData(userId: string): Promise<{ audit: number; usage: number; chunks: number }> {
+    const audit = await this.deleteAndCount("DELETE FROM bulwark_audit WHERE user_id = ?", userId);
+    const usage = await this.deleteAndCount("DELETE FROM bulwark_usage WHERE user_id = ?", userId);
     // Escape LIKE special chars (%, _) in userId to prevent unintended matches
     const escapedId = userId.replace(/[%_]/g, "\\$&");
-    const chunks = this.deleteAndCount("DELETE FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", `%"userId":"${escapedId}"%`);
+    const chunks = await this.deleteAndCount("DELETE FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", `%"userId":"${escapedId}"%`);
     return { audit, usage, chunks };
   }
 
   /**
    * Right to Erasure for a tenant — delete ALL tenant data.
    */
-  eraseTenantData(tenantId: string): { audit: number; usage: number; chunks: number; sources: number; policies: number } {
-    const audit = this.deleteAndCount("DELETE FROM bulwark_audit WHERE tenant_id = ?", tenantId);
-    const usage = this.deleteAndCount("DELETE FROM bulwark_usage WHERE tenant_id = ?", tenantId);
-    const chunks = this.deleteAndCount("DELETE FROM bulwark_chunks WHERE tenant_id = ?", tenantId);
-    const sources = this.deleteAndCount("DELETE FROM bulwark_knowledge_sources WHERE tenant_id = ?", tenantId);
-    const policies = this.deleteAndCount("DELETE FROM bulwark_policies WHERE tenant_id = ?", tenantId);
+  async eraseTenantData(tenantId: string): Promise<{ audit: number; usage: number; chunks: number; sources: number; policies: number }> {
+    const audit = await this.deleteAndCount("DELETE FROM bulwark_audit WHERE tenant_id = ?", tenantId);
+    const usage = await this.deleteAndCount("DELETE FROM bulwark_usage WHERE tenant_id = ?", tenantId);
+    const chunks = await this.deleteAndCount("DELETE FROM bulwark_chunks WHERE tenant_id = ?", tenantId);
+    const sources = await this.deleteAndCount("DELETE FROM bulwark_knowledge_sources WHERE tenant_id = ?", tenantId);
+    const policies = await this.deleteAndCount("DELETE FROM bulwark_policies WHERE tenant_id = ?", tenantId);
     return { audit, usage, chunks, sources, policies };
   }
 
   /**
    * Data Portability (Article 20) — export all data for a user as JSON.
    */
-  exportUserData(userId: string): UserDataExport {
-    const auditEntries = this.db.queryAll("SELECT * FROM bulwark_audit WHERE user_id = ? ORDER BY timestamp DESC", [userId]);
-    const usageRecords = this.db.queryAll("SELECT * FROM bulwark_usage WHERE user_id = ? ORDER BY timestamp DESC", [userId]);
+  async exportUserData(userId: string): Promise<UserDataExport> {
+    const auditEntries = await this.db.queryAll("SELECT * FROM bulwark_audit WHERE user_id = ? ORDER BY timestamp DESC", [userId]);
+    const usageRecords = await this.db.queryAll("SELECT * FROM bulwark_usage WHERE user_id = ? ORDER BY timestamp DESC", [userId]);
     const escapedId = userId.replace(/[%_]/g, "\\$&");
-    const knowledgeChunks = this.db.queryAll("SELECT id, source_id, content, metadata, created_at FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", [`%"userId":"${escapedId}"%`]);
+    const knowledgeChunks = await this.db.queryAll("SELECT id, source_id, content, metadata, created_at FROM bulwark_chunks WHERE metadata LIKE ? ESCAPE '\\'", [`%"userId":"${escapedId}"%`]);
 
     return {
       userId,
@@ -101,7 +101,7 @@ export class GDPRManager {
    * Data Retention — delete records older than retention period.
    * Call this on a schedule (e.g., daily cron).
    */
-  enforceRetention(): { auditDeleted: number; usageDeleted: number } {
+  async enforceRetention(): Promise<{ auditDeleted: number; usageDeleted: number }> {
     const days = this.config.retentionDays;
     if (!days || days <= 0) return { auditDeleted: 0, usageDeleted: 0 };
 
@@ -109,8 +109,8 @@ export class GDPRManager {
     cutoff.setDate(cutoff.getDate() - days);
     const cutoffStr = cutoff.toISOString();
 
-    const auditDeleted = this.deleteAndCount("DELETE FROM bulwark_audit WHERE timestamp < ?", cutoffStr);
-    const usageDeleted = this.deleteAndCount("DELETE FROM bulwark_usage WHERE timestamp < ?", cutoffStr);
+    const auditDeleted = await this.deleteAndCount("DELETE FROM bulwark_audit WHERE timestamp < ?", cutoffStr);
+    const usageDeleted = await this.deleteAndCount("DELETE FROM bulwark_usage WHERE timestamp < ?", cutoffStr);
 
     return { auditDeleted, usageDeleted };
   }
@@ -118,15 +118,15 @@ export class GDPRManager {
   /**
    * Generate a Data Processing Activity Report (for DPIA).
    */
-  generateProcessingReport(tenantId?: string): ProcessingReport {
+  async generateProcessingReport(tenantId?: string): Promise<ProcessingReport> {
     const filter = tenantId ? " WHERE tenant_id = ?" : "";
     const params = tenantId ? [tenantId] : [];
 
-    const totalRequests = this.db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit${filter}`, params);
-    const piiDetections = this.db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit WHERE pii_detections > 0${filter ? " AND tenant_id = ?" : ""}`, params);
-    const policyBlocks = this.db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit WHERE action = 'policy_block'${filter ? " AND tenant_id = ?" : ""}`, params);
-    const providers = this.db.queryAll<{ provider: string; c: number }>(`SELECT provider, COUNT(*) as c FROM bulwark_audit WHERE provider IS NOT NULL${filter ? " AND tenant_id = ?" : ""} GROUP BY provider`, params);
-    const uniqueUsers = this.db.queryOne<{ c: number }>(`SELECT COUNT(DISTINCT user_id) as c FROM bulwark_audit WHERE user_id IS NOT NULL${filter ? " AND tenant_id = ?" : ""}`, params);
+    const totalRequests = await this.db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit${filter}`, params);
+    const piiDetections = await this.db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit WHERE pii_detections > 0${filter ? " AND tenant_id = ?" : ""}`, params);
+    const policyBlocks = await this.db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit WHERE action = 'policy_block'${filter ? " AND tenant_id = ?" : ""}`, params);
+    const providers = await this.db.queryAll<{ provider: string; c: number }>(`SELECT provider, COUNT(*) as c FROM bulwark_audit WHERE provider IS NOT NULL${filter ? " AND tenant_id = ?" : ""} GROUP BY provider`, params);
+    const uniqueUsers = await this.db.queryOne<{ c: number }>(`SELECT COUNT(DISTINCT user_id) as c FROM bulwark_audit WHERE user_id IS NOT NULL${filter ? " AND tenant_id = ?" : ""}`, params);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -142,11 +142,11 @@ export class GDPRManager {
     };
   }
 
-  private deleteAndCount(sql: string, param: string): number {
+  private async deleteAndCount(sql: string, param: string): Promise<number> {
     try {
       // Count matching rows before deleting
       const countSql = sql.replace(/^DELETE FROM/, "SELECT COUNT(*) as c FROM");
-      const row = this.db.queryOne<{ c: number }>(countSql, [param]);
+      const row = await this.db.queryOne<{ c: number }>(countSql, [param]);
       const count = row?.c || 0;
       this.db.run(sql, [param]);
       return count;

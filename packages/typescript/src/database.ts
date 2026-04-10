@@ -4,11 +4,11 @@
  */
 
 export interface Database {
-  init(): void;
-  run(sql: string, params?: unknown[]): void;
-  queryOne<T>(sql: string, params?: unknown[]): T | undefined;
-  queryAll<T>(sql: string, params?: unknown[]): T[];
-  close(): void;
+  init(): void | Promise<void>;
+  run(sql: string, params?: unknown[]): void | Promise<void>;
+  queryOne<T>(sql: string, params?: unknown[]): Promise<T | undefined>;
+  queryAll<T>(sql: string, params?: unknown[]): Promise<T[]>;
+  close(): void | Promise<void>;
 }
 
 const SCHEMA = `
@@ -124,12 +124,12 @@ class SQLiteDatabase implements Database {
     (this.db as import("better-sqlite3").Database).prepare(sql).run(...(params || []));
   }
 
-  queryOne<T>(sql: string, params?: unknown[]): T | undefined {
+  async queryOne<T>(sql: string, params?: unknown[]): Promise<T | undefined> {
     this.ensureInit();
     return (this.db as import("better-sqlite3").Database).prepare(sql).get(...(params || [])) as T | undefined;
   }
 
-  queryAll<T>(sql: string, params?: unknown[]): T[] {
+  async queryAll<T>(sql: string, params?: unknown[]): Promise<T[]> {
     this.ensureInit();
     return (this.db as import("better-sqlite3").Database).prepare(sql).all(...(params || [])) as T[];
   }
