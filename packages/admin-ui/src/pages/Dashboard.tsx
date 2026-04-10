@@ -10,10 +10,18 @@ interface Dashboard {
   costByTeam: { teamId: string; cost: number; tokens: number }[];
 }
 
+interface GatewayStatus {
+  enabled: boolean; activeRequests: number;
+  circuitBreaker: Record<string, { state: "closed" | "open" | "half_open"; failures: number }>;
+}
+
 const COLORS = ["#635BFF", "#059669", "#D97706", "#2563EB", "#DC2626", "#7C3AED"];
+const CB_COLORS: Record<string, string> = { closed: "#059669", open: "#DC2626", half_open: "#D97706" };
+const CB_LABELS: Record<string, string> = { closed: "Closed", open: "Open", half_open: "Half Open" };
 
 export function DashboardPage({ apiBase }: { apiBase: string }) {
   const { data, loading } = useFetch<Dashboard>(`${apiBase}/dashboard`);
+  const { data: status } = useFetch<GatewayStatus>(`${apiBase}/status`);
   if (loading || !data) return <Loading />;
 
   const pieData = data.topModels.map(m => ({ name: m.model, value: m.count }));
@@ -70,6 +78,29 @@ export function DashboardPage({ apiBase }: { apiBase: string }) {
           </div>
         </div>
       </div>
+
+      {/* Gateway Health */}
+      {status && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 14, marginBottom: 24 }}>
+          <div style={card}>
+            <div style={{ ...label, marginBottom: 14 }}>Active Requests</div>
+            <div style={{ ...mono, fontSize: 36, fontWeight: 800, color: "#0A2540", letterSpacing: "-0.02em" }}>{status.activeRequests}</div>
+          </div>
+          <div style={card}>
+            <div style={{ ...label, marginBottom: 14 }}>Circuit Breaker States</div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {Object.entries(status.circuitBreaker).map(([provider, info]) => (
+                <div key={provider} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 8, background: `${CB_COLORS[info.state]}10`, border: `1px solid ${CB_COLORS[info.state]}30` }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: CB_COLORS[info.state] }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#0A2540" }}>{provider}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: CB_COLORS[info.state] }}>{CB_LABELS[info.state]}</span>
+                  {info.failures > 0 && <span style={{ fontSize: 11, ...mono, color: "#6B7280" }}>({info.failures} failures)</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Team Costs */}
       {data.costByTeam.length > 0 && (

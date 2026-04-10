@@ -1,9 +1,15 @@
 import React, { useState } from "react";
-import { PageHeader, StatCard, card, Loading, useFetch } from "../components/shared";
+import { PageHeader, StatCard, card, label as labelStyle, mono, Loading, useFetch } from "../components/shared";
 
 interface SettingsData {
   policyCount: number; sourceCount: number; budgetCount: number; tenantCount: number;
   monthlyUsage: { requests: number; tokens: number; cost: number };
+  circuitBreakerEnabled?: boolean; activeRequests?: number;
+}
+
+interface CircuitData {
+  enabled: boolean;
+  providers: Record<string, { state: "closed" | "open" | "half_open"; failures: number }>;
 }
 
 function ToggleSwitch({ defaultOn = true }: { defaultOn?: boolean }) {
@@ -26,6 +32,7 @@ function ToggleSwitch({ defaultOn = true }: { defaultOn?: boolean }) {
 export function SettingsPage({ apiBase }: { apiBase?: string }) {
   const base = apiBase || "http://localhost:3101/api/bulwark-admin";
   const { data, loading } = useFetch<SettingsData>(`${base}/settings`);
+  const { data: circuits } = useFetch<CircuitData>(`${base}/circuits`);
   const [activeSection, setActiveSection] = useState<string | null>(null);
 
   const sections = [
@@ -107,6 +114,49 @@ export function SettingsPage({ apiBase }: { apiBase?: string }) {
           <StatCard label="Monthly Cost" value={`$${data.monthlyUsage.cost}`} color="#D97706" />
         </div>
       )}
+
+      {/* Gateway Feature Status */}
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ ...labelStyle, marginBottom: 14 }}>Gateway Features</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          {/* Circuit Breaker */}
+          <div style={{ padding: "12px 16px", borderRadius: 10, background: data?.circuitBreakerEnabled ? "#05966910" : "#F3F4F6", border: `1px solid ${data?.circuitBreakerEnabled ? "#05966930" : "#E5E7EB"}` }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", marginBottom: 4 }}>Circuit Breaker</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: data?.circuitBreakerEnabled ? "#059669" : "#9CA3AF" }}>
+              {data?.circuitBreakerEnabled ? "Enabled" : "Disabled"}
+            </div>
+            {circuits && circuits.enabled && (
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                {Object.entries(circuits.providers).map(([provider, info]) => {
+                  const stateColor = info.state === "closed" ? "#059669" : info.state === "open" ? "#DC2626" : "#D97706";
+                  return (
+                    <span key={provider} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 6, background: `${stateColor}10`, color: stateColor, fontWeight: 500 }}>
+                      {provider}: {info.state}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          {/* Response Cache */}
+          <div style={{ padding: "12px 16px", borderRadius: 10, background: "#F3F4F6", border: "1px solid #E5E7EB" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", marginBottom: 4 }}>Response Cache</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#9CA3AF" }}>Disabled</div>
+          </div>
+          {/* Concurrency Limit */}
+          <div style={{ padding: "12px 16px", borderRadius: 10, background: data?.activeRequests ? "#2563EB10" : "#F3F4F6", border: `1px solid ${data?.activeRequests ? "#2563EB30" : "#E5E7EB"}` }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", marginBottom: 4 }}>Concurrency Limit</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: data?.activeRequests ? "#2563EB" : "#9CA3AF" }}>
+              {data?.activeRequests ? `${data.activeRequests} active` : "Not Set"}
+            </div>
+          </div>
+          {/* ML Injection Detection */}
+          <div style={{ padding: "12px 16px", borderRadius: 10, background: "#F3F4F6", border: "1px solid #E5E7EB" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", marginBottom: 4 }}>ML Injection Detection</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#9CA3AF" }}>Disabled</div>
+          </div>
+        </div>
+      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {sections.map(section => {

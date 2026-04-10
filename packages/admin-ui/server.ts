@@ -76,6 +76,23 @@ async function seedDemo() {
 }
 
 seedDemo().then(() => {
+  // Gateway status & circuit breaker mock endpoints
+  app.get("/api/bulwark-admin/status", (_req, res) => {
+    res.json({ enabled: true, activeRequests: 3, circuitBreaker: { openai: { state: "closed", failures: 0 }, anthropic: { state: "closed", failures: 0 } } });
+  });
+  app.get("/api/bulwark-admin/circuits", (_req, res) => {
+    res.json({ enabled: true, providers: { openai: { state: "closed", failures: 0 }, anthropic: { state: "closed", failures: 0 } } });
+  });
+  app.get("/api/bulwark-admin/tenants/:id/governance", (_req, res) => {
+    res.json({ governance: {} });
+  });
+  app.put("/api/bulwark-admin/tenants/:id/governance", (_req, res) => {
+    res.json({ success: true });
+  });
+  app.post("/api/bulwark-admin/circuits/:provider/reset", (_req, res) => {
+    res.json({ success: true });
+  });
+
   // Mount admin API
   app.use("/api/bulwark-admin", createAdminRouter(gateway, {
     auth: () => true, // demo — no auth

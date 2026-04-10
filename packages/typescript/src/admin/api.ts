@@ -169,6 +169,42 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
     res.json({ success: true });
   });
 
+  // ═══ TENANT GOVERNANCE ═══
+  router.get("/tenants/:id/governance", async (req: Req & { params: { id: string } }, res: Res) => {
+    if (!gateway.tenants) return res.status(400).json({ error: "Multi-tenant not enabled" });
+    const gov = await gateway.tenants.getGovernance(req.params.id);
+    res.json({ governance: gov || {} });
+  });
+
+  router.put("/tenants/:id/governance", async (req: Req & { params: { id: string } }, res: Res) => {
+    if (!gateway.tenants) return res.status(400).json({ error: "Multi-tenant not enabled" });
+    try {
+      await gateway.tenants.setGovernance(req.params.id, req.body as Record<string, unknown>);
+      res.json({ success: true });
+    } catch (err) { res.status(400).json({ error: err instanceof Error ? err.message : "Failed" }); }
+  });
+
+  // ═══ CIRCUIT BREAKER ═══
+  router.get("/circuits", (_req: Req, res: Res) => {
+    if (!gateway.circuits) return res.json({ enabled: false, providers: {} });
+    res.json({ enabled: true, providers: gateway.circuits.getAllStates() });
+  });
+
+  router.post("/circuits/:provider/reset", (req: Req & { params: { provider: string } }, res: Res) => {
+    if (!gateway.circuits) return res.status(400).json({ error: "Circuit breaker not enabled" });
+    gateway.circuits.reset(req.params.provider);
+    res.json({ success: true });
+  });
+
+  // ═══ GATEWAY STATUS ═══
+  router.get("/status", (_req: Req, res: Res) => {
+    res.json({
+      enabled: gateway.enabled,
+      activeRequests: gateway.activeRequestCount,
+      circuitBreaker: gateway.circuits ? gateway.circuits.getAllStates() : null,
+    });
+  });
+
   // ═══ SETTINGS ═══
   router.get("/settings", async (_req: Req, res: Res) => {
     const db = gateway.database;
@@ -189,6 +225,8 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
       sourceCount: sources.length,
       budgetCount: budgets.length,
       tenantCount: tenants.length,
+      circuitBreakerEnabled: !!gateway.circuits,
+      activeRequests: gateway.activeRequestCount,
       monthlyUsage: { requests: usage?.requests || 0, tokens: usage?.tokens || 0, cost: Math.round((usage?.cost || 0) * 100) / 100 },
     });
   });
