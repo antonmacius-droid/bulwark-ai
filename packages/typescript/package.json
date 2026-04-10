@@ -20,8 +20,6 @@
     "lint": "tsc --noEmit"
   },
   "keywords": [
-    "ai",
-    "gateway",
     "ai", "llm", "gateway", "governance",
     "pii", "prompt-injection", "gdpr", "soc2", "hipaa", "ccpa",
     "audit", "openai", "anthropic", "mistral", "google", "ollama",

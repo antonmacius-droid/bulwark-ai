@@ -48,9 +48,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bulwark-ai/bulwark-ai"
-Documentation = "https://github.com/bulwark-ai/bulwark-ai#readme"
-Repository = "https://github.com/bulwark-ai/bulwark-ai"
+Homepage = "https://github.com/antonmacius-droid/bulwark-ai"
+Documentation = "https://github.com/antonmacius-droid/bulwark-ai#readme"
+Repository = "https://github.com/antonmacius-droid/bulwark-ai"
 
 [tool.hatch.build.targets.wheel]
 packages = ["bulwark_ai"]

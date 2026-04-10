@@ -13,6 +13,7 @@ export default defineConfig([
       "@anthropic-ai/sdk",
       "express",
       "pg",
+      "ioredis",
       "uuid",
     ],
   },
@@ -28,6 +29,7 @@ export default defineConfig([
       "@anthropic-ai/sdk",
       "express",
       "pg",
+      "ioredis",
       "uuid",
     ],
     banner: {

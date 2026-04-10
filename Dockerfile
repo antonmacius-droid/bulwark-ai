@@ -42,9 +42,8 @@ RUN apk add --no-cache python3 make g++
 COPY packages/typescript/package.json packages/typescript/package-lock.json ./
 RUN npm ci --omit=dev && apk del python3 make g++
 
-# Copy compiled gateway
+# Copy compiled gateway (dist only — src is not needed at runtime)
 COPY --from=build-gateway /build/dist ./dist
-COPY --from=build-gateway /build/src ./src
 
 # Copy compiled admin UI
 COPY --from=build-ui /build/dist ./admin-ui
