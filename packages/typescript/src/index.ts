@@ -8,6 +8,8 @@ export { PolicyEngine } from "./security/policies";
 export type { PIIConfig, PIIMatch, PIIType, ContentPolicy } from "./security/types";
 export { PromptGuard, hardenSystemPrompt } from "./security/prompt-guard";
 export type { PromptGuardConfig, PromptGuardResult } from "./security/prompt-guard";
+export { PromptGuardML } from "./security/prompt-guard-ml";
+export type { PromptGuardMLConfig, MLDetectionResult } from "./security/prompt-guard-ml";
 
 // Billing
 export { CostCalculator } from "./billing/costs";

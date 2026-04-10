@@ -66,7 +66,20 @@ export interface GatewayConfig {
   modelPricing?: Record<string, { input: number; output: number }>;
 
   /** Prompt injection guard config */
-  promptGuard?: { enabled?: boolean; action?: "block" | "warn"; sensitivity?: "low" | "medium" | "high" };
+  /** Prompt injection guard config */
+  promptGuard?: {
+    enabled?: boolean;
+    action?: "block" | "warn";
+    sensitivity?: "low" | "medium" | "high";
+    /** ML-based detection — embedding similarity against known injection patterns (requires OpenAI key) */
+    ml?: {
+      enabled: boolean;
+      /** Similarity threshold (0-1). Default: 0.82 */
+      threshold?: number;
+      /** Additional injection examples to match against */
+      customExamples?: string[];
+    };
+  };
 
   /** LLM call timeout in ms (default: 120000) */
   timeoutMs?: number;

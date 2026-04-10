@@ -22,6 +22,8 @@ import type { CacheStore, RateLimitConfig } from "./cache/types";
 import { TenantManager, type TenantGovConfig } from "./tenant";
 import { CircuitBreaker, type CircuitBreakerConfig } from "./circuit-breaker";
 import { ResponseCache } from "./cache/response-cache";
+import { PromptGuardML, type PromptGuardMLConfig } from "./security/prompt-guard-ml";
+import { OpenAIEmbeddings } from "./rag/embeddings";
 
 /** Max message content length (characters) — prevents OOM from huge payloads */
 const MAX_MESSAGE_LENGTH = 200_000;
@@ -72,6 +74,7 @@ export class AIGateway {
   private readonly failMode: "fail-closed" | "fail-open";
   private readonly circuitBreaker: CircuitBreaker | null = null;
   private readonly responseCache: ResponseCache | null = null;
+  private readonly promptGuardML: PromptGuardML | null = null;
   private readonly maxConcurrent: number;
   private _enabled: boolean;
   private initialized = false;
@@ -111,6 +114,14 @@ export class AIGateway {
     this.promptGuard = new PromptGuard(
       config.promptGuard as PromptGuardConfig || { enabled: true, action: "block", sensitivity: "medium" }
     );
+
+    // ML-based prompt injection detection (requires OpenAI API key for embeddings)
+    const mlConfig = config.promptGuard?.ml as PromptGuardMLConfig | undefined;
+    if (mlConfig?.enabled && config.providers.openai?.apiKey) {
+      const embedder = new OpenAIEmbeddings(config.providers.openai.apiKey);
+      this.promptGuardML = new PromptGuardML(embedder, mlConfig);
+    }
+
     this._policyEngine = new PolicyEngine(config.policies || []);
     this.costCalculator = new CostCalculator(config.modelPricing);
     this.budgetManager = new BudgetManager(
@@ -240,6 +251,23 @@ export class AIGateway {
               });
               throw new BulwarkError("PROMPT_INJECTION", `Prompt injection detected in message ${i}: ${guardResult.injections.map(j => j.pattern).join(", ")}`, { injections: guardResult.injections });
             }
+          }
+        }
+      }
+
+      // 2b. ML-based injection detection — second layer after regex
+      if (this.promptGuardML) {
+        for (const msg of messages) {
+          if (msg.role !== "user") continue;
+          const mlResult = await this.promptGuardML.scan(msg.content);
+          if (mlResult.isInjection) {
+            await this.auditStore.log({
+              tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
+              action: "policy_block", model,
+              policyViolations: [`ml_injection:${mlResult.matchedCategory}`],
+              metadata: { similarity: mlResult.maxSimilarity, confidence: mlResult.confidence, category: mlResult.matchedCategory },
+            });
+            throw new BulwarkError("PROMPT_INJECTION", `ML-based injection detected (${mlResult.matchedCategory}, similarity: ${mlResult.maxSimilarity}, confidence: ${mlResult.confidence})`, { mlDetection: mlResult });
           }
         }
       }
@@ -475,6 +503,17 @@ export class AIGateway {
             } else {
               throw new BulwarkError("PROMPT_INJECTION", `Prompt injection detected in message ${i}: ${guardResult.injections.map(j => j.pattern).join(", ")}`, { injections: guardResult.injections });
             }
+          }
+        }
+      }
+
+      // ML-based injection detection — second layer after regex
+      if (this.promptGuardML) {
+        for (const msg of messages) {
+          if (msg.role !== "user") continue;
+          const mlResult = await this.promptGuardML.scan(msg.content);
+          if (mlResult.isInjection) {
+            throw new BulwarkError("PROMPT_INJECTION", `ML-based injection detected (${mlResult.matchedCategory}, similarity: ${mlResult.maxSimilarity})`, { mlDetection: mlResult });
           }
         }
       }
