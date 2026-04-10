@@ -5,6 +5,7 @@
 import type { AIGateway } from "../gateway";
 import type { Database } from "../database";
 import type { ContentPolicy } from "../security/types";
+import { SLAMonitor } from "../monitoring/sla-monitor";
 
 export interface AdminDashboard {
   requestsToday: number; requestsThisMonth: number;
@@ -229,6 +230,31 @@ export function createAdminRouter(gateway: AIGateway, options: { auth: (req: unk
       activeRequests: gateway.activeRequestCount,
       monthlyUsage: { requests: usage?.requests || 0, tokens: usage?.tokens || 0, cost: Math.round((usage?.cost || 0) * 100) / 100 },
     });
+  });
+
+  // ═══ SLA MONITORING ═══
+  const slaMonitor = new SLAMonitor(gateway.database);
+
+  router.get("/sla/health", async (req: Req, res: Res) => {
+    const window = (req.query.window || "24h") as "1h" | "6h" | "24h" | "7d" | "30d";
+    res.json(await slaMonitor.getProviderHealth(window));
+  });
+
+  router.get("/sla/health/:provider", async (req: Req & { params: { provider: string } }, res: Res) => {
+    const window = (req.query.window || "24h") as "1h" | "6h" | "24h" | "7d" | "30d";
+    const health = await slaMonitor.getProviderHealthSingle(req.params.provider, window);
+    if (!health) return res.status(404).json({ error: "No data for provider" });
+    res.json(health);
+  });
+
+  router.get("/sla/latency/:provider", async (req: Req & { params: { provider: string } }, res: Res) => {
+    const hours = Math.min(Number(req.query.hours) || 24, 720);
+    res.json({ trend: await slaMonitor.getLatencyTrend(req.params.provider, hours) });
+  });
+
+  router.get("/sla/errors/:provider", async (req: Req & { params: { provider: string } }, res: Res) => {
+    const hours = Math.min(Number(req.query.hours) || 24, 720);
+    res.json({ trend: await slaMonitor.getErrorTrend(req.params.provider, hours) });
   });
 
   // ═══ EXPORT ═══

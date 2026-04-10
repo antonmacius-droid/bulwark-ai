@@ -39,6 +39,10 @@ export type { CacheStore, RateLimitConfig, RateLimitResult, ResponseCacheConfig 
 export { CircuitBreaker } from "./circuit-breaker";
 export type { CircuitBreakerConfig } from "./circuit-breaker";
 
+// SLA Monitoring
+export { SLAMonitor } from "./monitoring/sla-monitor";
+export type { SLAMonitorConfig, AlertRule, SLAAlert, ProviderHealth, ProviderHealthSummary } from "./monitoring/sla-monitor";
+
 // Streaming
 export type { StreamEvent } from "./streaming";
 
