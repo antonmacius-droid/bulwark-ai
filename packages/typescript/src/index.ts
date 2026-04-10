@@ -43,6 +43,10 @@ export type { CircuitBreakerConfig } from "./circuit-breaker";
 export { SLAMonitor } from "./monitoring/sla-monitor";
 export type { SLAMonitorConfig, AlertRule, SLAAlert, ProviderHealth, ProviderHealthSummary } from "./monitoring/sla-monitor";
 
+// Prompt CI/CD
+export { PromptRegistry } from "./prompts/registry";
+export type { PromptVersion, TestCase, TestResult, TestSuiteResult, PromptRegistryConfig } from "./prompts/registry";
+
 // Streaming
 export type { StreamEvent } from "./streaming";
 
