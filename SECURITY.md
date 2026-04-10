@@ -12,7 +12,7 @@ If you discover a security vulnerability in Bulwark AI, please report it respons
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, email: **security@afkzonagroup.lt**
+Instead, email: **info@afkzonagroup.lt**
 
 Include:
 - Description of the vulnerability
