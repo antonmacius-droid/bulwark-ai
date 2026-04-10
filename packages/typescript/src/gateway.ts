@@ -21,6 +21,7 @@ import { RateLimiter } from "./cache/rate-limiter";
 import type { CacheStore, RateLimitConfig } from "./cache/types";
 import { TenantManager, type TenantGovConfig } from "./tenant";
 import { CircuitBreaker, type CircuitBreakerConfig } from "./circuit-breaker";
+import { ResponseCache } from "./cache/response-cache";
 
 /** Max message content length (characters) — prevents OOM from huge payloads */
 const MAX_MESSAGE_LENGTH = 200_000;
@@ -70,6 +71,7 @@ export class AIGateway {
   private readonly fallbacks: Record<string, string[]>;
   private readonly failMode: "fail-closed" | "fail-open";
   private readonly circuitBreaker: CircuitBreaker | null = null;
+  private readonly responseCache: ResponseCache | null = null;
   private readonly maxConcurrent: number;
   private _enabled: boolean;
   private initialized = false;
@@ -132,6 +134,8 @@ export class AIGateway {
     // Concurrency limit
     this.maxConcurrent = config.maxConcurrentRequests || 0; // 0 = unlimited
 
+    // Response cache (initialized after cache store below)
+
     // Cache — Redis or in-memory
     this.cache = (config.cache as CacheStore) || new MemoryCacheStore();
 
@@ -139,6 +143,15 @@ export class AIGateway {
     const rlConfig = config.rateLimit as RateLimitConfig | undefined;
     if (rlConfig?.enabled) {
       this.rateLimiter = new RateLimiter(this.cache, rlConfig);
+    }
+
+    // Response cache
+    if (config.responseCache?.enabled) {
+      this.responseCache = new ResponseCache(this.cache, {
+        enabled: true,
+        ttlSeconds: config.responseCache.ttlSeconds ?? 3600,
+        maxTokens: config.responseCache.maxTokens,
+      });
     }
 
     // Initialize providers — API keys are passed through, never stored on gateway
@@ -321,6 +334,21 @@ export class AIGateway {
         }
       }
 
+      // 6b. Response cache check — before LLM call
+      if (this.responseCache) {
+        const cached = await this.responseCache.get(request);
+        if (cached) {
+          const durationMs = Date.now() - start;
+          await this.auditStore.log({
+            tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
+            action: "chat", model: cached.model, provider: cached.provider,
+            inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs,
+            metadata: { ...request.metadata, cached: true },
+          });
+          return { ...cached, durationMs, trace };
+        }
+      }
+
       // 7. LLM Call with Retry + Fallback
       const llmResult = await this.callWithRetryAndFallback(model, messages, request);
       const llmResponse = llmResult.response;
@@ -360,7 +388,7 @@ export class AIGateway {
         metadata: request.metadata,
       });
 
-      return {
+      const result: ChatResponse = {
         content: outputContent,
         model: actualModel, provider: actualProvider,
         usage: llmResponse.usage,
@@ -371,6 +399,13 @@ export class AIGateway {
         ] : undefined,
         sources, auditId, durationMs, trace,
       };
+
+      // 12. Store in response cache
+      if (this.responseCache) {
+        await this.responseCache.set(request, result);
+      }
+
+      return result;
     } finally {
       this.activeRequests--;
     }

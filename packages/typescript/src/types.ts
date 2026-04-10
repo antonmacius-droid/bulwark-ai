@@ -87,6 +87,15 @@ export interface GatewayConfig {
     retryableStatuses?: number[];
   };
 
+  /** Response caching — caches identical deterministic requests (temperature=0) */
+  responseCache?: {
+    enabled: boolean;
+    /** TTL for cached responses in seconds (default: 3600) */
+    ttlSeconds?: number;
+    /** Only cache responses below this token count */
+    maxTokens?: number;
+  };
+
   /** Circuit breaker — auto-trips after repeated provider failures */
   circuitBreaker?: {
     enabled: boolean;
