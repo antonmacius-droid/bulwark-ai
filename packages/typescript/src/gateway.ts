@@ -473,11 +473,16 @@ export class AIGateway {
       // Stream with governance
       let fullContent = "";
       let finalUsage: ChatResponse["usage"] | undefined;
+      const piiAction = this.piiDetector.config?.action || "warn";
+      const bufferForPii = request.pii !== false && (piiAction === "redact" || piiAction === "block");
 
       for await (const chunk of providerInstance.chatStream({ model, messages, temperature: request.temperature, maxTokens: request.maxTokens, topP: request.topP, stop: request.stop })) {
         if (chunk.content) {
           fullContent += chunk.content;
-          yield { type: "delta", content: chunk.content };
+          // Only emit chunks immediately if we're NOT buffering for PII redaction
+          if (!bufferForPii) {
+            yield { type: "delta", content: chunk.content };
+          }
         }
         if (chunk.usage) finalUsage = chunk.usage;
         if (chunk.done && !finalUsage) finalUsage = chunk.usage;
@@ -486,7 +491,18 @@ export class AIGateway {
       // Post-stream: output PII scan
       if (request.pii !== false) {
         const outScan = this.piiDetector.scan(fullContent);
-        if (outScan.matches.length > 0) piiTypes.push(...outScan.matches.map(m => `output:${m.type}`));
+        if (outScan.matches.length > 0) {
+          piiTypes.push(...outScan.matches.map(m => `output:${m.type}`));
+        }
+        if (bufferForPii) {
+          if (outScan.blocked) {
+            // PII action is "block" and PII found in output — emit error instead of content
+            yield { type: "error", content: `Output blocked: PII detected (${outScan.matches.map(m => m.type).join(", ")})` };
+          } else {
+            // Emit the redacted (or clean) content as a single chunk
+            yield { type: "delta", content: outScan.redacted ? outScan.text : fullContent };
+          }
+        }
       }
 
       // Cost + audit

@@ -56,6 +56,51 @@ const INJECTION_PATTERNS: { pattern: RegExp; name: string; severity: "low" | "me
   { pattern: /base64[:\s]+[A-Za-z0-9+/]{50,}/gi, name: "encoded_payload", severity: "medium" },
 ];
 
+/**
+ * Normalize text to defeat common evasion techniques:
+ * - Unicode homoglyphs → ASCII equivalents
+ * - Zero-width / invisible characters removed
+ * - Excessive whitespace between letters collapsed
+ */
+function normalizeForScan(text: string): string {
+  let normalized = text;
+
+  // Remove zero-width and invisible Unicode characters
+  normalized = normalized.replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00AD\u034F\u2060\u2061\u2062\u2063\u2064]/g, "");
+
+  // Common homoglyph substitutions (Cyrillic, Greek, mathematical, fullwidth, etc.)
+  const homoglyphs: Record<string, string> = {
+    "\u0430": "a", "\u0435": "e", "\u043E": "o", "\u0440": "p", "\u0441": "c", "\u0443": "y", "\u0445": "x",
+    "\u0456": "i", "\u0458": "j", "\u04BB": "h", "\u0455": "s", "\u0432": "v", "\u043C": "m", "\u043D": "n",
+    "\u0410": "A", "\u0412": "B", "\u0415": "E", "\u041D": "H", "\u041E": "O", "\u0420": "P", "\u0421": "C",
+    "\u0422": "T", "\u0425": "X",
+    "\u0391": "A", "\u0392": "B", "\u0395": "E", "\u0397": "H", "\u0399": "I", "\u039A": "K", "\u039C": "M",
+    "\u039D": "N", "\u039F": "O", "\u03A1": "P", "\u03A4": "T", "\u03A5": "Y", "\u03A7": "X", "\u03B1": "a",
+    "\u03B5": "e", "\u03BF": "o",
+    "\uFF41": "a", "\uFF42": "b", "\uFF43": "c", "\uFF44": "d", "\uFF45": "e", "\uFF46": "f", "\uFF47": "g",
+    "\uFF48": "h", "\uFF49": "i", "\uFF4A": "j", "\uFF4B": "k", "\uFF4C": "l", "\uFF4D": "m", "\uFF4E": "n",
+    "\uFF4F": "o", "\uFF50": "p", "\uFF51": "q", "\uFF52": "r", "\uFF53": "s", "\uFF54": "t", "\uFF55": "u",
+    "\uFF56": "v", "\uFF57": "w", "\uFF58": "x", "\uFF59": "y", "\uFF5A": "z",
+    "\u2070": "0", "\u00B9": "1", "\u00B2": "2", "\u00B3": "3",
+    "０": "0", "１": "1", "２": "2", "３": "3", "４": "4", "５": "5", "６": "6", "７": "7", "８": "8", "９": "9",
+  };
+  normalized = normalized.replace(/./g, ch => homoglyphs[ch] || ch);
+
+  // Leet speak: common number/symbol → letter substitutions
+  normalized = normalized.replace(/1/g, "i").replace(/0/g, "o").replace(/3/g, "e").replace(/4/g, "a").replace(/5/g, "s").replace(/@/g, "a");
+
+  // Collapse whitespace inserted between individual letters (e.g., "i g n o r e" → "ignore")
+  // Detects sequences of 3+ single letters separated by whitespace and collapses them
+  normalized = normalized.replace(/(?<![a-zA-Z])([a-zA-Z])(\s+[a-zA-Z]){2,}(?![a-zA-Z])/g, (match) => {
+    return match.replace(/\s+/g, "");
+  });
+
+  // Normalize remaining whitespace
+  normalized = normalized.replace(/\s+/g, " ");
+
+  return normalized;
+}
+
 export class PromptGuard {
   private config: PromptGuardConfig;
   private patterns: typeof INJECTION_PATTERNS;
@@ -76,11 +121,44 @@ export class PromptGuard {
 
     const injections: PromptGuardResult["injections"] = [];
 
-    for (const { pattern, name, severity } of this.patterns) {
-      const regex = new RegExp(pattern.source, pattern.flags);
-      const match = regex.exec(text);
-      if (match) {
-        injections.push({ pattern: name, severity, matched: match[0].slice(0, 50) });
+    // Scan original, normalized, and whitespace-stripped versions to catch evasion
+    const normalized = normalizeForScan(text);
+    const textsToScan = [text, normalized];
+    const seen = new Set<string>();
+
+    for (const scanText of textsToScan) {
+      for (const { pattern, name, severity } of this.patterns) {
+        const regex = new RegExp(pattern.source, pattern.flags);
+        const match = regex.exec(scanText);
+        if (match && !seen.has(name + ":" + severity)) {
+          seen.add(name + ":" + severity);
+          injections.push({ pattern: name, severity, matched: match[0].slice(0, 50) });
+        }
+      }
+    }
+
+    // Whitespace-stripped scan: catches "i g n o r e  p r e v i o u s" evasion
+    // Strip all whitespace from normalized text and match against whitespace-stripped patterns
+    if (injections.length === 0) {
+      const stripped = normalized.replace(/\s+/g, "").toLowerCase();
+      const strippedKeywords: { words: string[]; name: string; severity: "low" | "medium" | "high" }[] = [
+        { words: ["ignorepreviousinstructions", "ignorepriorrules", "ignorepreviousprompts", "ignorepreviousrules", "ignorepreviousguidelines"], name: "instruction_override", severity: "high" },
+        { words: ["disregardpreviousinstructions", "disregardpriorrules", "disregardaboveinstructions"], name: "instruction_override", severity: "high" },
+        { words: ["forgeteverythingyouknow", "forgetpreviousinstructions", "forgetyourrules"], name: "instruction_override", severity: "high" },
+        { words: ["overridesafety", "overriderestrictions", "overridefilters", "overriderules"], name: "instruction_override", severity: "high" },
+        { words: ["donotfollowinstructions", "donotfollowrules", "donotfollowguidelines"], name: "instruction_override", severity: "high" },
+        { words: ["youarenowa", "youarenowmy", "youarenowthe", "youarenowfree"], name: "role_override", severity: "high" },
+        { words: ["developermodeenable", "developermodeon", "developermodeactivat"], name: "jailbreak", severity: "high" },
+      ];
+
+      for (const { words, name, severity } of strippedKeywords) {
+        for (const word of words) {
+          if (stripped.includes(word) && !seen.has(name + ":" + severity)) {
+            seen.add(name + ":" + severity);
+            injections.push({ pattern: name, severity, matched: `[whitespace-evasion: ${word.slice(0, 40)}]` });
+            break;
+          }
+        }
       }
     }
 

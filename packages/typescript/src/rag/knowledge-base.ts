@@ -36,7 +36,7 @@ export class KnowledgeBase {
    */
   async ingest(
     content: string,
-    source: { name: string; type: KnowledgeSource["type"]; tenantId?: string },
+    source: { name: string; type: KnowledgeSource["type"]; tenantId?: string; userId?: string },
     chunkOptions?: ChunkOptions
   ): Promise<{ sourceId: string; chunks: number }> {
     const sourceId = uuid();
@@ -70,7 +70,7 @@ export class KnowledgeBase {
         const embeddingBlob = Buffer.from(new Float32Array(embeddings[i]).buffer);
         this.db.run(
           "INSERT INTO bulwark_chunks (id, source_id, tenant_id, content, embedding, metadata) VALUES (?, ?, ?, ?, ?, ?)",
-          [chunkId, sourceId, source.tenantId || null, chunks[i].content, embeddingBlob, JSON.stringify({ index: chunks[i].index })]
+          [chunkId, sourceId, source.tenantId || null, chunks[i].content, embeddingBlob, JSON.stringify({ index: chunks[i].index, ...(source.userId ? { userId: source.userId } : {}) })]
         );
       }
 
