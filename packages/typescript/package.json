@@ -1,6 +1,6 @@
 {
   "name": "@bulwark-ai/gateway",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Enterprise AI governance gateway — PII detection, prompt injection guard, budget control, audit logging, RAG, multi-tenant. Drop into any Node.js app.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
