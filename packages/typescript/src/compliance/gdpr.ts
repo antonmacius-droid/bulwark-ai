@@ -1,4 +1,5 @@
 import { checkLicense } from "../rag/license-check";
+import { SOC2Manager } from "./soc2";
 /**
  * GDPR Compliance Module
  *
@@ -58,7 +59,15 @@ export class GDPRManager {
    * Returns count of deleted records per table.
    */
   async eraseUserData(userId: string): Promise<{ audit: number; usage: number; chunks: number }> {
-    const audit = await this.deleteAndCount("DELETE FROM bulwark_audit WHERE user_id = ?", userId);
+    // When immutableAudit is enabled, anonymize audit entries instead of deleting
+    let audit: number;
+    if (SOC2Manager.isAuditImmutable()) {
+      const countRow = await this.db.queryOne<{ c: number }>("SELECT COUNT(*) as c FROM bulwark_audit WHERE user_id = ?", [userId]);
+      audit = countRow?.c || 0;
+      await this.db.run("UPDATE bulwark_audit SET user_id = '[ERASED]', metadata = NULL WHERE user_id = ?", [userId]);
+    } else {
+      audit = await this.deleteAndCount("DELETE FROM bulwark_audit WHERE user_id = ?", userId);
+    }
     const usage = await this.deleteAndCount("DELETE FROM bulwark_usage WHERE user_id = ?", userId);
     // Escape LIKE special chars (%, _) in userId to prevent unintended matches
     const escapedId = userId.replace(/[%_]/g, "\\$&");

@@ -83,6 +83,11 @@ export class SOC2Manager {
     this.config = config;
     this.startTime = Date.now();
 
+    // Enforce immutable audit — create a guard function that other modules can check
+    if (config.immutableAudit) {
+      SOC2Manager._immutableAuditEnabled = true;
+    }
+
     // Create change log table
     try {
       db.run(`CREATE TABLE IF NOT EXISTS bulwark_change_log (
@@ -204,6 +209,16 @@ export class SOC2Manager {
       })),
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Check if immutable audit mode is active.
+   * When true, GDPR/CCPA modules should anonymize rather than delete audit entries.
+   */
+  static _immutableAuditEnabled = false;
+
+  static isAuditImmutable(): boolean {
+    return SOC2Manager._immutableAuditEnabled;
   }
 
   /** Health check endpoint data */

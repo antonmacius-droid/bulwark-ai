@@ -80,8 +80,8 @@ export class AIGateway {
   private initialized = false;
   private shutdownRequested = false;
   private activeRequests = 0;
-  /** Per-tenant config cache: tenantId → { config, expiresAt } */
-  private readonly tenantConfigCache = new Map<string, { config: TenantGovConfig; expiresAt: number }>();
+  /** Per-tenant config cache: tenantId → { config, instances, expiresAt } */
+  private readonly tenantConfigCache = new Map<string, { config: TenantGovConfig; pii: PIIDetector; guard: PromptGuard; expiresAt: number }>();
   private readonly tenantConfigTtlMs = 60_000; // 1 minute cache
 
   constructor(config: GatewayConfig) {
@@ -222,9 +222,10 @@ export class AIGateway {
       const model = request.model || "gpt-4o";
 
       // 0b. Resolve per-tenant governance overrides
-      const tenantGov = await this.resolveTenantGov(request.tenantId);
-      const effectivePii = this.resolvePiiDetector(tenantGov);
-      const effectiveGuard = this.resolvePromptGuard(tenantGov);
+      const tenantOverrides = await this.resolveTenantOverrides(request.tenantId);
+      const tenantGov = tenantOverrides?.config;
+      const effectivePii = tenantOverrides?.pii ?? this.piiDetector;
+      const effectiveGuard = tenantOverrides?.guard ?? this.promptGuard;
 
       // 0c. Model restriction — check tenant allowed models
       if (tenantGov?.allowedModels && tenantGov.allowedModels.length > 0) {
@@ -480,9 +481,10 @@ export class AIGateway {
       const model = request.model || "gpt-4o";
 
       // Resolve per-tenant governance overrides
-      const tenantGov = await this.resolveTenantGov(request.tenantId);
-      const effectivePii = this.resolvePiiDetector(tenantGov);
-      const effectiveGuard = this.resolvePromptGuard(tenantGov);
+      const tenantOverrides = await this.resolveTenantOverrides(request.tenantId);
+      const tenantGov = tenantOverrides?.config;
+      const effectivePii = tenantOverrides?.pii ?? this.piiDetector;
+      const effectiveGuard = tenantOverrides?.guard ?? this.promptGuard;
 
       // Model restriction — check tenant allowed models
       if (tenantGov?.allowedModels && tenantGov.allowedModels.length > 0) {
@@ -780,44 +782,39 @@ export class AIGateway {
    * Returns tenant overrides if tenantId is set and multi-tenant is enabled, undefined otherwise.
    * Results are cached for tenantConfigTtlMs.
    */
-  private async resolveTenantGov(tenantId?: string): Promise<TenantGovConfig | undefined> {
+  /**
+   * Resolve per-tenant governance config + cached PII/Guard instances.
+   * Returns { config, pii, guard } or undefined if no tenant config.
+   */
+  private async resolveTenantOverrides(tenantId?: string): Promise<{ config: TenantGovConfig; pii: PIIDetector; guard: PromptGuard } | undefined> {
     if (!tenantId || !this._tenantManager) return undefined;
 
     const now = Date.now();
     const cached = this.tenantConfigCache.get(tenantId);
-    if (cached && cached.expiresAt > now) return cached.config;
+    if (cached && cached.expiresAt > now) return { config: cached.config, pii: cached.pii, guard: cached.guard };
 
     const config = await this._tenantManager.getGovernance(tenantId);
-    if (config) {
-      this.tenantConfigCache.set(tenantId, { config, expiresAt: now + this.tenantConfigTtlMs });
-    }
-    return config;
-  }
+    if (!config) return undefined;
 
-  /**
-   * Create a PII detector scoped to tenant overrides.
-   * Returns the tenant-specific detector, or the global one if no overrides.
-   */
-  private resolvePiiDetector(tenantGov?: TenantGovConfig): PIIDetector {
-    if (!tenantGov?.pii) return this.piiDetector;
-    return new PIIDetector({
-      enabled: tenantGov.pii.enabled ?? this.piiDetector.config.enabled,
-      action: tenantGov.pii.action ?? this.piiDetector.config.action,
-      types: tenantGov.pii.types ?? this.piiDetector.config.types,
-    });
-  }
+    // Build and cache tenant-scoped instances
+    const pii = config.pii
+      ? new PIIDetector({
+          enabled: config.pii.enabled ?? this.piiDetector.config.enabled,
+          action: config.pii.action ?? this.piiDetector.config.action,
+          types: config.pii.types ?? this.piiDetector.config.types,
+        })
+      : this.piiDetector;
 
-  /**
-   * Create a prompt guard scoped to tenant overrides.
-   * Returns the tenant-specific guard, or the global one if no overrides.
-   */
-  private resolvePromptGuard(tenantGov?: TenantGovConfig): PromptGuard {
-    if (!tenantGov?.promptGuard) return this.promptGuard;
-    return new PromptGuard({
-      enabled: tenantGov.promptGuard.enabled ?? this.promptGuard.guardConfig.enabled,
-      action: tenantGov.promptGuard.action ?? this.promptGuard.guardConfig.action,
-      sensitivity: tenantGov.promptGuard.sensitivity ?? this.promptGuard.guardConfig.sensitivity,
-    } as PromptGuardConfig);
+    const guard = config.promptGuard
+      ? new PromptGuard({
+          enabled: config.promptGuard.enabled ?? this.promptGuard.guardConfig.enabled,
+          action: config.promptGuard.action ?? this.promptGuard.guardConfig.action,
+          sensitivity: config.promptGuard.sensitivity ?? this.promptGuard.guardConfig.sensitivity,
+        } as PromptGuardConfig)
+      : this.promptGuard;
+
+    this.tenantConfigCache.set(tenantId, { config, pii, guard, expiresAt: now + this.tenantConfigTtlMs });
+    return { config, pii, guard };
   }
 
   /** Graceful shutdown — wait for in-flight requests, close connections */

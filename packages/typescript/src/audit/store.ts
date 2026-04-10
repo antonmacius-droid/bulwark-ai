@@ -37,8 +37,9 @@ export function createAuditStore(db: Database): AuditStore {
       if (filters.userId) { where += " AND user_id = ?"; params.push(filters.userId); }
       if (filters.teamId) { where += " AND team_id = ?"; params.push(filters.teamId); }
       if (filters.action) { where += " AND action = ?"; params.push(filters.action); }
-      if (filters.from) { where += " AND timestamp >= ?"; params.push(filters.from); }
-      if (filters.to) { where += " AND timestamp <= ?"; params.push(filters.to); }
+      const isoDateRe = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?/;
+      if (filters.from && isoDateRe.test(filters.from)) { where += " AND timestamp >= ?"; params.push(filters.from); }
+      if (filters.to && isoDateRe.test(filters.to)) { where += " AND timestamp <= ?"; params.push(filters.to); }
 
       const totalRow = await db.queryOne<{ c: number }>(`SELECT COUNT(*) as c FROM bulwark_audit ${where}`, params);
       const total = totalRow?.c || 0;

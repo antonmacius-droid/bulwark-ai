@@ -15,7 +15,7 @@ const PII_PATTERNS: Record<PIIType, RegExp> = {
   name: /\b[A-ZÄÖÜŠŽČĘĖĮŪŲ][a-zäöüšžčęėįūų]+\s+[A-ZÄÖÜŠŽČĘĖĮŪŲ][a-zäöüšžčęėįūų]+\b/g,
   // EU-specific
   vat_number: /\b[A-Z]{2}\d{8,12}\b/g,
-  national_id: /\b\d{6,11}[-/]?\d{0,4}\b/g, // Generic — covers most EU national ID formats
+  national_id: /\b\d{11}\b|\b\d{6}-\d{4}\b|\b\d{9}[A-Z]\b/g, // EU national IDs: 11-digit (LT/EE), 6-4 (SE), 9+letter (IT)
   medical_id: /\b(?:NHS|EHIC|SVN|AMM)[-\s]?\d{6,12}\b/gi,
 };
 

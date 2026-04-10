@@ -21,6 +21,8 @@ export interface CircuitBreakerConfig {
   failureThreshold?: number;
   /** Time in ms to wait before allowing a test request (default: 30000) */
   cooldownMs?: number;
+  /** Max consecutive open cycles before auto-reset (default: 10). Prevents permanent tripping. */
+  maxOpenCycles?: number;
 }
 
 type CircuitState = "closed" | "open" | "half_open";
@@ -30,16 +32,20 @@ interface ProviderCircuit {
   failures: number;
   lastFailureAt: number;
   lastSuccessAt: number;
+  /** How many times the circuit has re-opened from half-open */
+  openCycles: number;
 }
 
 export class CircuitBreaker {
   private readonly circuits = new Map<string, ProviderCircuit>();
   private readonly failureThreshold: number;
   private readonly cooldownMs: number;
+  private readonly maxOpenCycles: number;
 
   constructor(config: CircuitBreakerConfig) {
     this.failureThreshold = config.failureThreshold ?? 5;
     this.cooldownMs = config.cooldownMs ?? 30_000;
+    this.maxOpenCycles = config.maxOpenCycles ?? 10;
   }
 
   /** Check if a provider is available. Returns false if circuit is open. */
@@ -66,6 +72,7 @@ export class CircuitBreaker {
     if (circuit) {
       circuit.state = "closed";
       circuit.failures = 0;
+      circuit.openCycles = 0;
       circuit.lastSuccessAt = Date.now();
     }
   }
@@ -74,7 +81,7 @@ export class CircuitBreaker {
   recordFailure(provider: string): void {
     let circuit = this.circuits.get(provider);
     if (!circuit) {
-      circuit = { state: "closed", failures: 0, lastFailureAt: 0, lastSuccessAt: 0 };
+      circuit = { state: "closed", failures: 0, lastFailureAt: 0, lastSuccessAt: 0, openCycles: 0 };
       this.circuits.set(provider, circuit);
     }
 
@@ -82,8 +89,15 @@ export class CircuitBreaker {
     circuit.lastFailureAt = Date.now();
 
     if (circuit.state === "half_open") {
-      // Test request failed — back to open
-      circuit.state = "open";
+      circuit.openCycles++;
+      // Auto-reset after too many open cycles to prevent permanent tripping
+      if (circuit.openCycles >= this.maxOpenCycles) {
+        circuit.state = "closed";
+        circuit.failures = 0;
+        circuit.openCycles = 0;
+      } else {
+        circuit.state = "open";
+      }
     } else if (circuit.failures >= this.failureThreshold) {
       circuit.state = "open";
     }
