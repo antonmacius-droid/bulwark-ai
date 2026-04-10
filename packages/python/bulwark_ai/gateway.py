@@ -49,6 +49,7 @@ from .providers.anthropic_provider import AnthropicProvider
 from .providers.mistral_provider import MistralProvider
 from .providers.google_provider import GoogleProvider
 from .providers.ollama_provider import OllamaProvider
+from .rag.knowledge_base import KnowledgeBase
 from .security.pii import PIIDetector, PIIMatch, ScanResult
 from .security.policies import PolicyEngine
 from .security.prompt_guard import PromptGuard, harden_system_prompt
@@ -162,6 +163,16 @@ class AIGateway:
             elif name == "ollama":
                 self._providers["ollama"] = OllamaProvider(provider_cfg)
 
+        # Knowledge base (RAG)
+        self._kb: Optional[KnowledgeBase] = None
+        openai_key = resolved.providers.get("openai")
+        if resolved.rag and resolved.rag.enabled and openai_key:
+            self._kb = KnowledgeBase(
+                db_path=db_path,
+                config=resolved.rag,
+                openai_api_key=openai_key.api_key,
+            )
+
         self._initialized = False
         self._shutdown_requested = False
         self._active_requests = 0
@@ -212,6 +223,8 @@ class AIGateway:
         if self._initialized:
             return
         await self._db.init()
+        if self._kb:
+            await self._kb.initialize()
         self._initialized = True
         logger.info("AIGateway initialized")
 
@@ -242,6 +255,11 @@ class AIGateway:
     def database(self) -> Database:
         """Get the database instance."""
         return self._db
+
+    @property
+    def rag(self) -> Optional[KnowledgeBase]:
+        """Get the knowledge base for document ingestion and search."""
+        return self._kb
 
     @property
     def enabled(self) -> bool:
@@ -410,6 +428,50 @@ class AIGateway:
                     for m in messages
                 ]
 
+            # 5b. RAG Augmentation — search KB and inject context into system prompt
+            sources: Optional[List[SourceInfo]] = None
+            if request.knowledge_base and self._kb:
+                last_content = messages[-1].content if messages else ""
+                rag_results = await self._kb.search(
+                    last_content,
+                    tenant_id=request.tenant_id,
+                    top_k=6,
+                )
+                if rag_results:
+                    sources = [
+                        SourceInfo(content=r.chunk.content, source=r.chunk.source_name, score=r.score)
+                        for r in rag_results
+                    ]
+                    context = "\n\n".join(
+                        f"[{i + 1}] {r.chunk.source_name}: {r.chunk.content}"
+                        for i, r in enumerate(rag_results)
+                    )
+                    rag_instruction = (
+                        "\n\nUse ONLY the following knowledge base context to answer. "
+                        "Cite sources using [1], [2] etc. If the context doesn't contain "
+                        "the answer, say so — do not make up information.\n\n"
+                        f"--- KNOWLEDGE BASE CONTEXT ---\n{context}\n--- END CONTEXT ---"
+                    )
+                    if has_system:
+                        messages = [
+                            ChatMessage(
+                                role=m.role,
+                                content=m.content + rag_instruction if m.role == "system" else m.content,
+                                name=m.name,
+                            )
+                            for m in messages
+                        ]
+                    else:
+                        base_prompt = harden_system_prompt(
+                            "You are a helpful assistant.",
+                            prevent_extraction=True,
+                            enforce_gdpr=pii_enabled,
+                        )
+                        messages = [
+                            ChatMessage(role="system", content=base_prompt + rag_instruction),
+                            *messages,
+                        ]
+
             # 6. LLM Call with Retry + Fallback
             llm_result = await self._call_with_retry_and_fallback(model, messages, request)
             llm_response = llm_result["response"]
@@ -486,6 +548,7 @@ class AIGateway:
                     total=cost_record.total_cost,
                 ),
                 pii_detections=pii_info,
+                sources=sources,
                 audit_id=audit_id,
                 duration_ms=duration_ms,
                 trace=trace,
