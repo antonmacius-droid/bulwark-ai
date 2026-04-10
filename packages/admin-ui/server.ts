@@ -10,7 +10,7 @@ import cors from "cors";
 import { AIGateway, createAdminRouter, bulwarkRouter } from "../typescript/src/index";
 
 const app = express();
-app.use(cors({ origin: "http://localhost:3100", credentials: true }));
+app.use(cors({ origin: ["http://localhost:3100", "http://127.0.0.1:3100", "http://localhost:3101", "http://127.0.0.1:3101"], credentials: true }));
 app.use(express.json());
 
 // Create gateway (OpenAI key optional — UI works without it)
@@ -53,7 +53,7 @@ async function seedDemo() {
     const timestamp = new Date(Date.now() - daysAgo * 86400000).toISOString();
 
     db.run(
-      "INSERT INTO bulwark_audit (id, user_id, team_id, action, model, provider, input_tokens, output_tokens, cost_usd, duration_ms, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO bulwark_audit (id, user_id, team_id, action, model, provider, input_tokens, output_tokens, cost_usd, duration_ms, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [`demo-${i}`, user, team, "chat", model, model.includes("claude") ? "anthropic" : "openai", inputTokens, outputTokens, cost * (inputTokens + outputTokens) / 1000, Math.floor(Math.random() * 3000) + 200, timestamp]
     );
     db.run(
@@ -64,11 +64,11 @@ async function seedDemo() {
 
   // Add some PII and policy events
   for (let i = 0; i < 15; i++) {
-    db.run("INSERT INTO bulwark_audit (id, user_id, action, model, pii_detections, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+    db.run("INSERT OR IGNORE INTO bulwark_audit (id, user_id, action, model, pii_detections, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
       [`pii-${i}`, users[i % 5], "pii_detected", "gpt-4o", Math.floor(Math.random() * 3) + 1, new Date(Date.now() - i * 3600000).toISOString()]);
   }
   for (let i = 0; i < 5; i++) {
-    db.run("INSERT INTO bulwark_audit (id, user_id, action, policy_violations, timestamp) VALUES (?, ?, ?, ?, ?)",
+    db.run("INSERT OR IGNORE INTO bulwark_audit (id, user_id, action, policy_violations, timestamp) VALUES (?, ?, ?, ?, ?)",
       [`policy-${i}`, users[i], "policy_block", JSON.stringify(["no-secrets"]), new Date(Date.now() - i * 7200000).toISOString()]);
   }
 
