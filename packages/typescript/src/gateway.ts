@@ -20,6 +20,7 @@ import { MemoryCacheStore } from "./cache/memory";
 import { RateLimiter } from "./cache/rate-limiter";
 import type { CacheStore, RateLimitConfig } from "./cache/types";
 import { TenantManager, type TenantGovConfig } from "./tenant";
+import { CircuitBreaker, type CircuitBreakerConfig } from "./circuit-breaker";
 
 /** Max message content length (characters) — prevents OOM from huge payloads */
 const MAX_MESSAGE_LENGTH = 200_000;
@@ -68,6 +69,8 @@ export class AIGateway {
   private readonly retryConfig: { maxRetries: number; baseDelayMs: number; retryableStatuses: number[] };
   private readonly fallbacks: Record<string, string[]>;
   private readonly failMode: "fail-closed" | "fail-open";
+  private readonly circuitBreaker: CircuitBreaker | null = null;
+  private readonly maxConcurrent: number;
   private _enabled: boolean;
   private initialized = false;
   private shutdownRequested = false;
@@ -121,6 +124,14 @@ export class AIGateway {
     };
     this.fallbacks = config.fallbacks || {};
 
+    // Circuit breaker
+    if (config.circuitBreaker?.enabled) {
+      this.circuitBreaker = new CircuitBreaker(config.circuitBreaker);
+    }
+
+    // Concurrency limit
+    this.maxConcurrent = config.maxConcurrentRequests || 0; // 0 = unlimited
+
     // Cache — Redis or in-memory
     this.cache = (config.cache as CacheStore) || new MemoryCacheStore();
 
@@ -171,6 +182,12 @@ export class AIGateway {
     }
 
     await this.init();
+
+    // Concurrency limit
+    if (this.maxConcurrent > 0 && this.activeRequests >= this.maxConcurrent) {
+      throw new BulwarkError("CONCURRENCY_EXCEEDED", `Max concurrent requests (${this.maxConcurrent}) reached. Try again later.`);
+    }
+
     this.activeRequests++;
     const start = Date.now();
     const trace: ChatResponse["trace"] = request.debug ? [] : undefined;
@@ -385,6 +402,12 @@ export class AIGateway {
   }> {
     if (this.shutdownRequested) throw new BulwarkError("SHUTTING_DOWN", "Gateway is shutting down");
     await this.init();
+
+    // Concurrency limit
+    if (this.maxConcurrent > 0 && this.activeRequests >= this.maxConcurrent) {
+      throw new BulwarkError("CONCURRENCY_EXCEEDED", `Max concurrent requests (${this.maxConcurrent}) reached. Try again later.`);
+    }
+
     this.activeRequests++;
     const start = Date.now();
 
@@ -596,6 +619,11 @@ export class AIGateway {
         continue; // provider not configured, try next fallback
       }
 
+      // Circuit breaker: skip provider if circuit is open
+      if (this.circuitBreaker && !this.circuitBreaker.isAvailable(resolved.provider)) {
+        continue;
+      }
+
       for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
         try {
           const response = await this.callWithTimeout(
@@ -607,9 +635,14 @@ export class AIGateway {
             this.timeoutMs,
             currentModel
           );
+          // Circuit breaker: record success
+          if (this.circuitBreaker) this.circuitBreaker.recordSuccess(resolved.provider);
           return { response, model: currentModel, provider: resolved.provider };
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
+
+          // Circuit breaker: record failure
+          if (this.circuitBreaker) this.circuitBreaker.recordFailure(resolved.provider);
 
           // Don't retry on non-retryable errors (auth, validation, etc.)
           const isRetryable = err instanceof BulwarkError
@@ -750,6 +783,12 @@ export class AIGateway {
   /** Kill switch — disable/enable the gateway at runtime */
   get enabled(): boolean { return this._enabled; }
   set enabled(value: boolean) { this._enabled = value; }
+
+  /** Circuit breaker instance — for health checks and admin resets */
+  get circuits(): CircuitBreaker | null { return this.circuitBreaker; }
+
+  /** Current active request count */
+  get activeRequestCount(): number { return this.activeRequests; }
 }
 
 /** Bulwark-specific error with code and metadata */
@@ -777,7 +816,7 @@ export class BulwarkError extends Error {
       INVALID_REQUEST: 400, INVALID_CONFIG: 400,
       PII_BLOCKED: 403, POLICY_BLOCKED: 403, PROMPT_INJECTION: 400,
       PROVIDER_NOT_CONFIGURED: 404, MODEL_NOT_ALLOWED: 403,
-      RATE_LIMITED: 429, BUDGET_EXCEEDED: 429,
+      RATE_LIMITED: 429, BUDGET_EXCEEDED: 429, CONCURRENCY_EXCEEDED: 429,
       LLM_TIMEOUT: 504, LLM_ERROR: 502,
       SHUTTING_DOWN: 503,
     };

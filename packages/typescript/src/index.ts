@@ -33,6 +33,10 @@ export { RateLimiter } from "./cache/rate-limiter";
 export { ResponseCache } from "./cache/response-cache";
 export type { CacheStore, RateLimitConfig, RateLimitResult, ResponseCacheConfig } from "./cache/types";
 
+// Circuit Breaker
+export { CircuitBreaker } from "./circuit-breaker";
+export type { CircuitBreakerConfig } from "./circuit-breaker";
+
 // Streaming
 export type { StreamEvent } from "./streaming";
 

@@ -59,6 +59,22 @@ export class RedisCacheStore implements CacheStore {
   async expire(key: string, ttlSeconds: number): Promise<void> {
     await this.client.expire(this.key(key), ttlSeconds);
   }
+
+  /**
+   * Atomic increment + expire via Lua script.
+   * Guarantees the key always has a TTL, even under concurrent access.
+   */
+  async incrWithExpire(key: string, ttlSeconds: number, by = 1): Promise<number> {
+    const lua = `
+      local current = redis.call('INCRBY', KEYS[1], ARGV[1])
+      if current == tonumber(ARGV[1]) then
+        redis.call('EXPIRE', KEYS[1], ARGV[2])
+      end
+      return current
+    `;
+    const result = await this.client.eval(lua, 1, this.key(key), by.toString(), ttlSeconds.toString());
+    return typeof result === "number" ? result : parseInt(String(result), 10);
+  }
 }
 
 /** Minimal Redis client interface — compatible with ioredis and node-redis */
@@ -70,4 +86,5 @@ interface RedisLike {
   incr(key: string): Promise<number>;
   incrby(key: string, increment: number): Promise<number>;
   expire(key: string, seconds: number): Promise<unknown>;
+  eval(script: string, numkeys: number, ...args: string[]): Promise<unknown>;
 }

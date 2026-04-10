@@ -17,10 +17,15 @@ export class RateLimiter {
     if (!scopeId) return { allowed: true, remaining: Infinity, resetAt: 0 };
 
     const windowKey = `ratelimit:${this.config.scope}:${scopeId}:${this.currentWindow()}`;
-    const count = await this.store.incr(windowKey);
 
-    // Always set/refresh expiry to ensure the key is cleaned up
-    await this.store.expire(windowKey, this.config.windowSeconds);
+    // Use atomic incrWithExpire when available (Redis), fall back to separate calls (memory)
+    let count: number;
+    if (this.store.incrWithExpire) {
+      count = await this.store.incrWithExpire(windowKey, this.config.windowSeconds);
+    } else {
+      count = await this.store.incr(windowKey);
+      await this.store.expire(windowKey, this.config.windowSeconds);
+    }
 
     const remaining = Math.max(0, this.config.maxRequests - count);
     const resetAt = Math.ceil(Date.now() / 1000 / this.config.windowSeconds) * this.config.windowSeconds * 1000;

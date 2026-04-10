@@ -87,6 +87,18 @@ export interface GatewayConfig {
     retryableStatuses?: number[];
   };
 
+  /** Circuit breaker — auto-trips after repeated provider failures */
+  circuitBreaker?: {
+    enabled: boolean;
+    /** Consecutive failures before tripping (default: 5) */
+    failureThreshold?: number;
+    /** Cooldown in ms before allowing a test request (default: 30000) */
+    cooldownMs?: number;
+  };
+
+  /** Max concurrent LLM requests — returns 429 when at capacity (0 = unlimited) */
+  maxConcurrentRequests?: number;
+
   /**
    * Fallback models — tried in order when the primary model fails.
    * Maps a model name to a list of fallback models.

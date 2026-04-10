@@ -16,6 +16,8 @@ export interface CacheStore {
   getCounter(key: string): Promise<number>;
   /** Set expiry on a key */
   expire(key: string, ttlSeconds: number): Promise<void>;
+  /** Atomically increment and set expiry. Returns new counter value. */
+  incrWithExpire?(key: string, ttlSeconds: number, by?: number): Promise<number>;
 }
 
 export interface RateLimitConfig {
