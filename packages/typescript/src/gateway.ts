@@ -192,6 +192,159 @@ export class AIGateway {
   }
 
   /**
+   * Run all governance pre-flight checks.
+   * Shared between chat() and chatStream() to avoid duplication.
+   * Returns processed messages, PII detections, sources, and resolved governance instances.
+   */
+  private async runPreflightChecks(request: ChatRequest): Promise<{
+    model: string;
+    messages: ChatRequest["messages"];
+    piiDetections: PIIMatch[];
+    piiTypes: string[];
+    sources: ChatResponse["sources"];
+    effectivePii: PIIDetector;
+    tenantGov: import("./tenant").TenantGovConfig | undefined;
+  }> {
+    this.validateRequest(request);
+    const model = request.model || "gpt-4o";
+
+    // Resolve per-tenant governance overrides
+    const tenantOverrides = await this.resolveTenantOverrides(request.tenantId);
+    const tenantGov = tenantOverrides?.config;
+    const effectivePii = tenantOverrides?.pii ?? this.piiDetector;
+    const effectiveGuard = tenantOverrides?.guard ?? this.promptGuard;
+
+    // Model restriction
+    if (tenantGov?.allowedModels && tenantGov.allowedModels.length > 0) {
+      if (!tenantGov.allowedModels.some(m => model.toLowerCase().startsWith(m.toLowerCase()))) {
+        throw new BulwarkError("MODEL_NOT_ALLOWED", `Model "${model}" is not allowed for this tenant. Allowed: ${tenantGov.allowedModels.join(", ")}`);
+      }
+    }
+
+    // Prompt injection — regex scan ALL user messages
+    let messages = [...request.messages];
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role === "user") {
+        const guardResult = effectiveGuard.scan(msg.content);
+        if (!guardResult.safe) {
+          if (guardResult.sanitizedText) {
+            messages = [...messages.slice(0, i), { ...msg, content: guardResult.sanitizedText }, ...messages.slice(i + 1)];
+          } else {
+            await this.auditStore.log({
+              tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
+              action: "policy_block", model,
+              policyViolations: guardResult.injections.map(j => `prompt_injection:${j.pattern}`),
+              metadata: { injections: guardResult.injections, messageIndex: i },
+            });
+            throw new BulwarkError("PROMPT_INJECTION", `Prompt injection detected in message ${i}: ${guardResult.injections.map(j => j.pattern).join(", ")}`, { injections: guardResult.injections });
+          }
+        }
+      }
+    }
+
+    // ML-based injection detection — second layer
+    if (this.promptGuardML) {
+      for (const msg of messages) {
+        if (msg.role !== "user") continue;
+        const mlResult = await this.promptGuardML.scan(msg.content);
+        if (mlResult.isInjection) {
+          await this.auditStore.log({
+            tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
+            action: "policy_block", model,
+            policyViolations: [`ml_injection:${mlResult.matchedCategory}`],
+            metadata: { similarity: mlResult.maxSimilarity, confidence: mlResult.confidence, category: mlResult.matchedCategory },
+          });
+          throw new BulwarkError("PROMPT_INJECTION", `ML-based injection detected (${mlResult.matchedCategory}, similarity: ${mlResult.maxSimilarity}, confidence: ${mlResult.confidence})`, { mlDetection: mlResult });
+        }
+      }
+    }
+
+    // PII Detection — scan ALL user messages
+    const piiDetections: PIIMatch[] = [];
+    const piiTypes: string[] = [];
+    if (request.pii !== false) {
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        if (msg.role !== "user") continue;
+        const result = effectivePii.scan(msg.content);
+        piiDetections.push(...result.matches);
+        piiTypes.push(...result.matches.map(m => m.type));
+        if (result.blocked) {
+          await this.auditStore.log({
+            tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
+            action: "pii_detected", model, piiDetections: result.matches.length,
+            metadata: { types: result.matches.map(m => m.type), messageIndex: i },
+          });
+          throw new BulwarkError("PII_BLOCKED", `PII detected and blocked in message ${i}: ${result.matches.map(m => m.type).join(", ")}`, { piiDetections: result.matches });
+        }
+        if (result.redacted) {
+          messages = [...messages.slice(0, i), { ...msg, content: result.text }, ...messages.slice(i + 1)];
+        }
+      }
+    }
+
+    // Content Policy Check
+    if (!request.skipPolicies) {
+      const violations = this._policyEngine.check(messages, { userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
+      const blocked = violations.filter(v => v.action === "block");
+      if (blocked.length > 0) {
+        await this.auditStore.log({
+          tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
+          action: "policy_block", model, policyViolations: blocked.map(v => v.policyId),
+        });
+        throw new BulwarkError("POLICY_BLOCKED", `Content policy violated: ${blocked.map(v => v.policyName).join(", ")}`, { violations: blocked });
+      }
+    }
+
+    // Rate Limiting
+    if (this.rateLimiter) {
+      const rl = await this.rateLimiter.check({ userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
+      if (!rl.allowed) {
+        throw new BulwarkError("RATE_LIMITED", `Rate limit exceeded. Retry after ${Math.ceil((rl.resetAt - Date.now()) / 1000)}s`, { remaining: rl.remaining, resetAt: rl.resetAt });
+      }
+    }
+
+    // Budget Check
+    if (this.budgetManager.enabled) {
+      const allowed = await this.budgetManager.checkBudget({ userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
+      if (!allowed.ok) {
+        await this.auditStore.log({
+          tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
+          action: "budget_exceeded", model, metadata: { used: allowed.used, limit: allowed.limit },
+        });
+        throw new BulwarkError("BUDGET_EXCEEDED", `Budget exceeded: ${allowed.used}/${allowed.limit} tokens used`, { used: allowed.used, limit: allowed.limit });
+      }
+    }
+
+    // System prompt hardening + RAG
+    let sources: ChatResponse["sources"] = undefined;
+    const hasSystemMsg = messages.some(m => m.role === "system");
+    if (hasSystemMsg) {
+      messages = messages.map(m => m.role === "system"
+        ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false }) }
+        : m
+      );
+    }
+    if (request.knowledgeBase && this.kb) {
+      const results = await this.kb.search(messages[messages.length - 1]?.content || "", { tenantId: request.tenantId, topK: 6 });
+      if (results.length > 0) {
+        sources = results.map(r => ({ content: r.chunk.content, source: r.chunk.sourceName, score: r.score }));
+        const context = results.map((r, i) => `[${i + 1}] ${r.chunk.sourceName}: ${r.chunk.content}`).join("\n\n");
+        const ragInstruction = `\n\nUse ONLY the following knowledge base context to answer. Cite sources using [1], [2] etc. If the context doesn't contain the answer, say so — do not make up information.\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`;
+        if (hasSystemMsg) {
+          messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
+        } else {
+          const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false });
+          messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
+        }
+      }
+    }
+
+    return { model, messages, piiDetections, piiTypes, sources, effectivePii, tenantGov };
+  }
+
+  /**
    * Send a chat completion request through the governance pipeline.
    *
    * Pipeline: Validate → PII scan → Policy check → Rate limit → Budget check → [RAG augment] → LLM call (with timeout) → Token count → Cost calc → Audit log
@@ -217,153 +370,12 @@ export class AIGateway {
     const trace: ChatResponse["trace"] = request.debug ? [] : undefined;
 
     try {
-      // 0. Input Validation
-      this.validateRequest(request);
-      const model = request.model || "gpt-4o";
+      // Run all governance pre-flight checks
+      const preflight = await this.runPreflightChecks(request);
+      const { model, piiDetections, sources, effectivePii } = preflight;
+      const messages = preflight.messages;
 
-      // 0b. Resolve per-tenant governance overrides
-      const tenantOverrides = await this.resolveTenantOverrides(request.tenantId);
-      const tenantGov = tenantOverrides?.config;
-      const effectivePii = tenantOverrides?.pii ?? this.piiDetector;
-      const effectiveGuard = tenantOverrides?.guard ?? this.promptGuard;
-
-      // 0c. Model restriction — check tenant allowed models
-      if (tenantGov?.allowedModels && tenantGov.allowedModels.length > 0) {
-        if (!tenantGov.allowedModels.some(m => model.toLowerCase().startsWith(m.toLowerCase()))) {
-          throw new BulwarkError("MODEL_NOT_ALLOWED", `Model "${model}" is not allowed for this tenant. Allowed: ${tenantGov.allowedModels.join(", ")}`);
-        }
-      }
-
-      // 2. Prompt Injection Detection — scan ALL user messages, not just last
-      let messages = [...request.messages]; // defensive copy
-      for (let i = 0; i < messages.length; i++) {
-        const msg = messages[i];
-        if (msg.role === "user") {
-          const guardResult = effectiveGuard.scan(msg.content);
-          if (!guardResult.safe) {
-            if (guardResult.sanitizedText) {
-              messages = [...messages.slice(0, i), { ...msg, content: guardResult.sanitizedText }, ...messages.slice(i + 1)];
-            } else {
-              await this.auditStore.log({
-                tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-                action: "policy_block", model,
-                policyViolations: guardResult.injections.map(j => `prompt_injection:${j.pattern}`),
-                metadata: { injections: guardResult.injections, messageIndex: i },
-              });
-              throw new BulwarkError("PROMPT_INJECTION", `Prompt injection detected in message ${i}: ${guardResult.injections.map(j => j.pattern).join(", ")}`, { injections: guardResult.injections });
-            }
-          }
-        }
-      }
-
-      // 2b. ML-based injection detection — second layer after regex
-      if (this.promptGuardML) {
-        for (const msg of messages) {
-          if (msg.role !== "user") continue;
-          const mlResult = await this.promptGuardML.scan(msg.content);
-          if (mlResult.isInjection) {
-            await this.auditStore.log({
-              tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-              action: "policy_block", model,
-              policyViolations: [`ml_injection:${mlResult.matchedCategory}`],
-              metadata: { similarity: mlResult.maxSimilarity, confidence: mlResult.confidence, category: mlResult.matchedCategory },
-            });
-            throw new BulwarkError("PROMPT_INJECTION", `ML-based injection detected (${mlResult.matchedCategory}, similarity: ${mlResult.maxSimilarity}, confidence: ${mlResult.confidence})`, { mlDetection: mlResult });
-          }
-        }
-      }
-
-      // 3. PII Detection — scan ALL user messages
-      const piiDetections: PIIMatch[] = [];
-      if (request.pii !== false) {
-        for (let i = 0; i < messages.length; i++) {
-          const msg = messages[i];
-          if (msg.role !== "user") continue;
-          const result = effectivePii.scan(msg.content);
-          piiDetections.push(...result.matches);
-          if (result.blocked) {
-            await this.auditStore.log({
-              tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-              action: "pii_detected", model,
-              piiDetections: result.matches.length,
-              metadata: { types: result.matches.map(m => m.type), messageIndex: i },
-            });
-            throw new BulwarkError("PII_BLOCKED", `PII detected and blocked in message ${i}: ${result.matches.map(m => m.type).join(", ")}`, { piiDetections: result.matches });
-          }
-          if (result.redacted) {
-            messages = [...messages.slice(0, i), { ...msg, content: result.text }, ...messages.slice(i + 1)];
-          }
-        }
-      }
-
-      // 3. Content Policy Check
-      if (!request.skipPolicies) {
-        const violations = this._policyEngine.check(messages, { userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
-        const blocked = violations.filter(v => v.action === "block");
-        if (blocked.length > 0) {
-          await this.auditStore.log({
-            tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-            action: "policy_block", model,
-            policyViolations: blocked.map(v => v.policyId),
-          });
-          throw new BulwarkError("POLICY_BLOCKED", `Content policy violated: ${blocked.map(v => v.policyName).join(", ")}`, { violations: blocked });
-        }
-      }
-
-      // 4. Rate Limiting
-      if (this.rateLimiter) {
-        const rl = await this.rateLimiter.check({ userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
-        if (!rl.allowed) {
-          throw new BulwarkError("RATE_LIMITED", `Rate limit exceeded. Retry after ${Math.ceil((rl.resetAt - Date.now()) / 1000)}s`, { remaining: rl.remaining, resetAt: rl.resetAt });
-        }
-      }
-
-      // 5. Budget Check
-      if (this.budgetManager.enabled) {
-        const allowed = await this.budgetManager.checkBudget({ userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
-        if (!allowed.ok) {
-          await this.auditStore.log({
-            tenantId: request.tenantId, userId: request.userId, teamId: request.teamId,
-            action: "budget_exceeded", model,
-            metadata: { used: allowed.used, limit: allowed.limit },
-          });
-          throw new BulwarkError("BUDGET_EXCEEDED", `Budget exceeded: ${allowed.used}/${allowed.limit} tokens used`, { used: allowed.used, limit: allowed.limit });
-        }
-      }
-
-      // 6. System prompt hardening + RAG Augmentation
-      let sources: ChatResponse["sources"] = undefined;
-      const hasSystemMsg = messages.some(m => m.role === "system");
-
-      // Harden existing system prompt or inject one
-      if (hasSystemMsg) {
-        messages = messages.map(m => m.role === "system"
-          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false }) }
-          : m
-        );
-      }
-
-      // RAG: search KB and inject context into system prompt
-      if (request.knowledgeBase && this.kb) {
-        const results = await this.kb.search(
-          messages[messages.length - 1]?.content || "",
-          { tenantId: request.tenantId, topK: 6 }
-        );
-        if (results.length > 0) {
-          sources = results.map(r => ({ content: r.chunk.content, source: r.chunk.sourceName, score: r.score }));
-          const context = results.map((r, i) => `[${i + 1}] ${r.chunk.sourceName}: ${r.chunk.content}`).join("\n\n");
-          const ragInstruction = `\n\nUse ONLY the following knowledge base context to answer. Cite sources using [1], [2] etc. If the context doesn't contain the answer, say so — do not make up information.\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`;
-
-          if (hasSystemMsg) {
-            messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
-          } else {
-            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false });
-            messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
-          }
-        }
-      }
-
-      // 6b. Response cache check — before LLM call
+      // Response cache check — before LLM call
       if (this.responseCache) {
         const cached = await this.responseCache.get(request);
         if (cached) {
@@ -476,107 +488,11 @@ export class AIGateway {
     const start = Date.now();
 
     try {
-      // Run all pre-flight checks — IDENTICAL to non-streaming chat()
-      this.validateRequest(request);
-      const model = request.model || "gpt-4o";
-
-      // Resolve per-tenant governance overrides
-      const tenantOverrides = await this.resolveTenantOverrides(request.tenantId);
-      const tenantGov = tenantOverrides?.config;
-      const effectivePii = tenantOverrides?.pii ?? this.piiDetector;
-      const effectiveGuard = tenantOverrides?.guard ?? this.promptGuard;
-
-      // Model restriction — check tenant allowed models
-      if (tenantGov?.allowedModels && tenantGov.allowedModels.length > 0) {
-        if (!tenantGov.allowedModels.some(m => model.toLowerCase().startsWith(m.toLowerCase()))) {
-          throw new BulwarkError("MODEL_NOT_ALLOWED", `Model "${model}" is not allowed for this tenant. Allowed: ${tenantGov.allowedModels.join(", ")}`);
-        }
-      }
-
-      // Prompt injection — scan ALL user messages (not just last)
-      let messages = [...request.messages];
-      for (let i = 0; i < messages.length; i++) {
-        const msg = messages[i];
-        if (msg.role === "user") {
-          const guardResult = effectiveGuard.scan(msg.content);
-          if (!guardResult.safe) {
-            if (guardResult.sanitizedText) {
-              messages = [...messages.slice(0, i), { ...msg, content: guardResult.sanitizedText }, ...messages.slice(i + 1)];
-            } else {
-              throw new BulwarkError("PROMPT_INJECTION", `Prompt injection detected in message ${i}: ${guardResult.injections.map(j => j.pattern).join(", ")}`, { injections: guardResult.injections });
-            }
-          }
-        }
-      }
-
-      // ML-based injection detection — second layer after regex
-      if (this.promptGuardML) {
-        for (const msg of messages) {
-          if (msg.role !== "user") continue;
-          const mlResult = await this.promptGuardML.scan(msg.content);
-          if (mlResult.isInjection) {
-            throw new BulwarkError("PROMPT_INJECTION", `ML-based injection detected (${mlResult.matchedCategory}, similarity: ${mlResult.maxSimilarity})`, { mlDetection: mlResult });
-          }
-        }
-      }
-
-      // PII scan — scan ALL user messages (not just last)
-      const piiTypes: string[] = [];
-      if (request.pii !== false) {
-        for (let i = 0; i < messages.length; i++) {
-          const msg = messages[i];
-          if (msg.role !== "user") continue;
-          const result = effectivePii.scan(msg.content);
-          piiTypes.push(...result.matches.map(m => m.type));
-          if (result.blocked) throw new BulwarkError("PII_BLOCKED", `PII detected and blocked in message ${i}`);
-          if (result.redacted) {
-            messages = [...messages.slice(0, i), { ...msg, content: result.text }, ...messages.slice(i + 1)];
-          }
-        }
-      }
-
-      // Policy check
-      if (!request.skipPolicies) {
-        const violations = this._policyEngine.check(messages, { userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
-        const blocked = violations.filter(v => v.action === "block");
-        if (blocked.length > 0) throw new BulwarkError("POLICY_BLOCKED", `Policy violated: ${blocked.map(v => v.policyName).join(", ")}`);
-      }
-
-      // Rate limit + budget
-      if (this.rateLimiter) {
-        const rl = await this.rateLimiter.check({ userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
-        if (!rl.allowed) throw new BulwarkError("RATE_LIMITED", "Rate limit exceeded");
-      }
-      if (this.budgetManager.enabled) {
-        const allowed = await this.budgetManager.checkBudget({ userId: request.userId, teamId: request.teamId, tenantId: request.tenantId });
-        if (!allowed.ok) throw new BulwarkError("BUDGET_EXCEEDED", "Budget exceeded");
-      }
-
-      // System prompt hardening (was missing in streaming mode)
-      const hasSystemMsg = messages.some(m => m.role === "system");
-      if (hasSystemMsg) {
-        messages = messages.map(m => m.role === "system"
-          ? { ...m, content: hardenSystemPrompt(m.content, { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false }) }
-          : m
-        );
-      }
-
-      // RAG
-      let sources: ChatResponse["sources"] = undefined;
-      if (request.knowledgeBase && this.kb) {
-        const results = await this.kb.search(messages[messages.length - 1]?.content || "", { tenantId: request.tenantId, topK: 6 });
-        if (results.length > 0) {
-          sources = results.map(r => ({ content: r.chunk.content, source: r.chunk.sourceName, score: r.score }));
-          const context = results.map((r, i) => `[${i + 1}] ${r.chunk.sourceName}: ${r.chunk.content}`).join("\n\n");
-          const ragInstruction = `\n\nUse ONLY the following knowledge base context to answer. Cite sources using [1], [2] etc.\n\n--- KNOWLEDGE BASE CONTEXT ---\n${context}\n--- END CONTEXT ---`;
-          if (hasSystemMsg) {
-            messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + ragInstruction } : m);
-          } else {
-            const basePrompt = hardenSystemPrompt("You are a helpful assistant.", { preventExtraction: true, enforceGDPR: effectivePii.config?.enabled ?? false });
-            messages = [{ role: "system", content: basePrompt + ragInstruction }, ...messages];
-          }
-        }
-      }
+      // Run all governance pre-flight checks (shared with chat())
+      const preflight = await this.runPreflightChecks(request);
+      const { model, sources, effectivePii } = preflight;
+      const messages = preflight.messages;
+      const piiTypes = preflight.piiTypes;
 
       // Resolve provider for streaming
       const { provider, providerInstance } = this.resolveProvider(model);
@@ -765,8 +681,8 @@ export class AIGateway {
     if (m.startsWith("gemini") || m.startsWith("palm")) return this.getProvider("google");
     // Ollama (local models)
     if (m.startsWith("llama") || m.startsWith("phi") || m.startsWith("qwen") || m.startsWith("deepseek") || m.startsWith("codellama")) return this.getProvider("ollama");
-    // Azure — if configured and model doesn't match any other prefix, prefer Azure over OpenAI
-    if (this.providers.has("azure")) return this.getProvider("azure");
+    // Azure — only if explicitly prefixed with "azure/" (e.g., "azure/gpt-4o")
+    if (m.startsWith("azure/") && this.providers.has("azure")) return this.getProvider("azure");
     // Default: OpenAI
     return this.getProvider("openai");
   }
