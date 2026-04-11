@@ -110,7 +110,11 @@ export class PromptGuardML {
         category: e.category,
         embedding: embeddings[i],
       }));
-    })();
+    })().catch((err) => {
+      // Clear cached promise so next call retries instead of permanently failing
+      this.initPromise = null;
+      throw err;
+    });
 
     return this.initPromise;
   }

@@ -34,7 +34,7 @@
  * // { passed: true, score: 0.91, details: [...] }
  *
  * // Deploy (keeps previous version as hot standby)
- * await registry.deploy("contract-analyzer", { systemPrompt: "..." });
+ * await registry.register("contract-analyzer", { systemPrompt: "..." });
  *
  * // Instant rollback (< 1ms, no pipeline rebuild)
  * await registry.rollback("contract-analyzer");

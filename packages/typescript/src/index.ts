@@ -87,3 +87,16 @@ export { bulwarkPlugin } from "./middleware/fastify";
 // Admin
 export { createAdminRouter, getDashboard } from "./admin/api";
 export type { AdminDashboard } from "./admin/api";
+
+// Cross-Product Memory
+export { CrossProductMemory } from "./memory";
+export type {
+  Engram, EngramStage, EngramKind, EngramOrigin,
+  Association, AssociationType,
+  PrivacyLevel, ProductManifest,
+  RecallQuery, RecallResult,
+  ContextEvent, ContextEventType, ContextEventHandler,
+  CrossProductMemoryConfig,
+  GravityWell, MemoryStats,
+} from "./memory";
+export type { RememberOptions } from "./memory/index";

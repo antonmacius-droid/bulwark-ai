@@ -1,6 +1,7 @@
 import type { PIIConfig, ContentPolicy } from "./security/types";
 import type { BudgetConfig } from "./billing/types";
 import type { RAGConfig } from "./rag/types";
+import type { CrossProductMemoryConfig } from "./memory/types";
 
 export interface ProviderConfig {
   apiKey: string;
@@ -59,13 +60,15 @@ export interface GatewayConfig {
   /** Multi-tenant mode */
   multiTenant?: boolean;
 
+  /** Cross-Product AI Memory — shared context across product suite */
+  memory?: CrossProductMemoryConfig;
+
   /** Default model to use if not specified per request */
   defaultModel?: string;
 
   /** Model pricing overrides (per million tokens) */
   modelPricing?: Record<string, { input: number; output: number }>;
 
-  /** Prompt injection guard config */
   /** Prompt injection guard config */
   promptGuard?: {
     enabled?: boolean;
@@ -157,6 +160,13 @@ export interface ChatRequest {
   /** RAG knowledge base — set to true to enable, or pass a source ID to search specific source */
   knowledgeBase?: boolean | string;
 
+  /**
+   * Cross-product memory — set to true to recall context, or pass product ID.
+   * When enabled, the gateway automatically recalls relevant cross-product
+   * context and injects it into the system prompt.
+   */
+  crossProductMemory?: boolean | string;
+
   /** Override PII settings for this request */
   pii?: boolean;
   /** Override policies for this request */
@@ -209,6 +219,9 @@ export interface ChatResponse {
 
   /** RAG sources used */
   sources?: { content: string; source: string; score: number }[];
+
+  /** Cross-product memory context that was surfaced */
+  memoryContext?: { content: string; product: string; kind: string; score: number; reason: string }[];
 
   /** Audit log entry ID */
   auditId?: string;

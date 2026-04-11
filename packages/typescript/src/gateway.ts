@@ -24,6 +24,7 @@ import { CircuitBreaker, type CircuitBreakerConfig } from "./circuit-breaker";
 import { ResponseCache } from "./cache/response-cache";
 import { PromptGuardML, type PromptGuardMLConfig } from "./security/prompt-guard-ml";
 import { OpenAIEmbeddings } from "./rag/embeddings";
+import { CrossProductMemory } from "./memory";
 
 /** Max message content length (characters) — prevents OOM from huge payloads */
 const MAX_MESSAGE_LENGTH = 200_000;
@@ -75,6 +76,7 @@ export class AIGateway {
   private readonly circuitBreaker: CircuitBreaker | null = null;
   private readonly responseCache: ResponseCache | null = null;
   private readonly promptGuardML: PromptGuardML | null = null;
+  private readonly _memory: CrossProductMemory | null = null;
   private readonly maxConcurrent: number;
   private _enabled: boolean;
   private initialized = false;
@@ -182,6 +184,16 @@ export class AIGateway {
     if (config.multiTenant) {
       this._tenantManager = new TenantManager(this.db);
     }
+
+    // Cross-Product Memory
+    if (config.memory?.enabled) {
+      const memoryConfig = { ...config.memory };
+      // Auto-inherit OpenAI key for embeddings if not explicitly set
+      if (!memoryConfig.embeddings?.apiKey && config.providers.openai?.apiKey) {
+        memoryConfig.embeddings = { ...memoryConfig.embeddings, apiKey: config.providers.openai.apiKey };
+      }
+      this._memory = new CrossProductMemory(this.db, memoryConfig);
+    }
   }
 
   /** Initialize database tables. Called automatically on first request. */
@@ -204,6 +216,7 @@ export class AIGateway {
     sources: ChatResponse["sources"];
     effectivePii: PIIDetector;
     tenantGov: import("./tenant").TenantGovConfig | undefined;
+    memoryContext: ChatResponse["memoryContext"];
   }> {
     this.validateRequest(request);
     const model = request.model || "gpt-4o";
@@ -341,7 +354,47 @@ export class AIGateway {
       }
     }
 
-    return { model, messages, piiDetections, piiTypes, sources, effectivePii, tenantGov };
+    // Cross-Product Memory — recall and inject context
+    let memoryContext: ChatResponse["memoryContext"] = undefined;
+    if (request.crossProductMemory && this._memory) {
+      const productId = typeof request.crossProductMemory === "string" ? request.crossProductMemory : request.metadata?.productId as string || "default";
+      const lastUserMsg = messages.filter(m => m.role === "user").pop();
+      if (lastUserMsg && request.userId && request.tenantId) {
+        const memoryResults = await this._memory.recall({
+          query: lastUserMsg.content,
+          productId,
+          userId: request.userId,
+          tenantId: request.tenantId,
+          topK: 5,
+        });
+        if (memoryResults.length > 0) {
+          memoryContext = memoryResults.map(r => ({
+            content: r.engram.content,
+            product: r.engram.productId,
+            kind: r.engram.kind,
+            score: r.score,
+            reason: r.reason,
+          }));
+          const contextStr = await this._memory.recallAsContext({
+            query: lastUserMsg.content,
+            productId,
+            userId: request.userId,
+            tenantId: request.tenantId,
+            topK: 5,
+          });
+          if (contextStr) {
+            const memoryInstruction = `\n\n${contextStr}`;
+            if (hasSystemMsg) {
+              messages = messages.map(m => m.role === "system" ? { ...m, content: m.content + memoryInstruction } : m);
+            } else {
+              messages = [{ role: "system", content: `You are a helpful assistant.${memoryInstruction}` }, ...messages];
+            }
+          }
+        }
+      }
+    }
+
+    return { model, messages, piiDetections, piiTypes, sources, effectivePii, tenantGov, memoryContext };
   }
 
   /**
@@ -372,7 +425,7 @@ export class AIGateway {
     try {
       // Run all governance pre-flight checks
       const preflight = await this.runPreflightChecks(request);
-      const { model, piiDetections, sources, effectivePii } = preflight;
+      const { model, piiDetections, sources, effectivePii, memoryContext } = preflight;
       const messages = preflight.messages;
 
       // Response cache check — before LLM call
@@ -438,7 +491,7 @@ export class AIGateway {
           ...piiDetections.map(m => ({ type: m.type, redacted: true, direction: "input" as const })),
           ...outputPiiDetections.map(m => ({ type: m.type, redacted: true, direction: "output" as const })),
         ] : undefined,
-        sources, auditId, durationMs, trace,
+        sources, memoryContext, auditId, durationMs, trace,
       };
 
       // 12. Store in response cache
@@ -476,6 +529,7 @@ export class AIGateway {
     auditId?: string;
     durationMs?: number;
   }> {
+    if (!this._enabled) throw new BulwarkError("GATEWAY_DISABLED", "AI gateway is disabled. Set enabled: true to resume.");
     if (this.shutdownRequested) throw new BulwarkError("SHUTTING_DOWN", "Gateway is shutting down");
     await this.init();
 
@@ -748,6 +802,9 @@ export class AIGateway {
       (this.cache as { close: () => void }).close();
     }
 
+    // Shutdown memory system
+    if (this._memory) await this._memory.shutdown();
+
     // Close database
     this.db.close();
   }
@@ -776,6 +833,9 @@ export class AIGateway {
 
   /** Current active request count */
   get activeRequestCount(): number { return this.activeRequests; }
+
+  /** Cross-Product Memory system (memory mode only) */
+  get memory(): CrossProductMemory | null { return this._memory; }
 }
 
 /** Bulwark-specific error with code and metadata */
